@@ -3,9 +3,9 @@
 # ----------------------- #
 
 url: http://pcwalton.github.com
-title: My Octopress Blog
-subtitle: A blogging framework for hackers.
-author: Your Name
+title: pcwalton
+subtitle: Occasional notes on Rust, Firefox, etc.
+author: Patrick Walton
 simple_search: http://google.com/search
 description:
 
