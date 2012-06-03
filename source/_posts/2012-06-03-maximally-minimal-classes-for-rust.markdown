@@ -10,7 +10,7 @@ Now that classes have been implemented as per the original proposal, the other R
 
 Language design tends to go in cycles: we grow the language to accommodate new functionality, then shrink the language as we discover ways in which the features can be orthogonally integrated into the rest of the system. Classes seem to me to be on the upward trajectory of complexity; now it's time to shrink them down. At the same time, we shouldn't sacrifice the functionality that they enable.
 
-In Rust, classes provide five main pieces of functionality that don't otherwise exist: (1) nominal records; (2) constructors; (3) privacy on the field level; (4) attached methods; and (5) destructors. I'll go over these four features in turn and discuss how each one could be simplified.
+In Rust, classes provide five main pieces of functionality that don't otherwise exist: (1) nominal records; (2) constructors; (3) privacy on the field level; (4) attached methods; and (5) destructors. I'll go over these five features in turn and discuss how each one could be simplified.
 
 ## Nominal records
 
