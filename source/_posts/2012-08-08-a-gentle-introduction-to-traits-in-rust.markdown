@@ -6,14 +6,14 @@ comments: true
 categories: 
 ---
 
-Rust traits are one of the most interesting features of the language to me; they pack a lot of flexibility into a simple system. But because of the rapid pace of development of the language, there's been a fair amount of confusion as to how they work. As such, I figured I'd write up a quick tutorial explaining why and how to use them.
+Rust traits pack a lot of flexibility into a simple system, and they're one of my favorite features of the language. But as a result of the rapid pace of the language's development, there's been a fair amount of confusion as to how they work. As such, I figured I'd write up a quick tutorial explaining why and how to use them.
 
 This tutorial assumes only basic knowledge of C-like languages, so I'll try to explain everything specific to Rust that might be unclear along the way. Also note that a couple of these features are unimplemented, so if you try this today the syntax will be a little different.
 
 Simple implementations
-======================
+----------------------
 
-Let's suppose I'm writing a game. I'll start by defining a struct `Monster` and a struct `Player` like this:
+In keeping with the theme of my previous blog posts on classes, let's start by writing a game. I'll start by defining a struct `Monster` and a struct `Player` like this:
 
     struct Monster {
         name: &str;      // `&str` is a reference to a string
@@ -59,7 +59,7 @@ There are several things to note here.
 * Within an implementation, functions with a `self` parameter become methods. Python programmers will find this "explicit self" familiar. Because references are explicit in Rust, you specify how `self` is supposed to be passed; in this case, by reference (`&self`).
 
 Generics
-========
+--------
 
 Now that we have basic implementations covered, let's look at something completely different: generics. (We'll come back to implementations later on.) Like many other languages, Rust features generic functions: functions that can operate on many different types. For example, here's a function that returns true if a vector is empty:
 
@@ -74,7 +74,7 @@ The generic type parameters are written inside the angle brackets (`<` and `>`),
 There's nothing much more to say here; generics are pretty simple. In this form, however, they're pretty limited, as we'll see.
 
 Limitations of generics
-=======================
+-----------------------
 
 Let's go back to our game example. Suppose I want to add functionality to save the state of the game to disk in [JSON](http://en.wikipedia.org/wiki/JSON). I'll implement some methods on `Monster` and `Player` to do this:
 
@@ -115,7 +115,7 @@ What the Rust compiler is telling me is that it doesn't know that the type `T` i
 So I'm stuck. But Rust provides a solution: traits.
 
 Trait declaration
-=================
+-----------------
 
 Traits are the way to tell the Rust compiler about *functionality that a type must provide*. They're very similar in spirit to interfaces in Java, C#, and Go, and are similar in implementation to typeclasses in Haskell. They provide the solution to the problem I'm facing: I need to tell the Rust compiler, first of all, that some types can be converted to JSON, and, additionally, for the types that can be converted to JSON, how to do it.
 
@@ -145,7 +145,7 @@ Now I can define implementations of `ToJSON` for the various types I'm intereste
 That's all there is to it. Now I can modify the `save` function so that it does what I want.
 
 Trait usage
-===========
+-----------
 
 Recall that the reason why the `save` function didn't compile is that the Rust compiler didn't know that the `T` type contained a `to_json` method. What I need is some way to tell the compiler that this function only accepts types that contain the methods I need to call. This is accomplished through *trait restrictions*. I modify the `save` function as follows:
 
@@ -168,7 +168,7 @@ But this call will not:
 I get the error "failed to find an implementation of trait `ToJSON` for `Penguin`", just as expected.
 
 Summing up
-==========
+----------
 
 These are the basic features of traits and comprise most of what Rust programmers will need to know. There are only a few more features beyond these, which I'll mention briefly:
 
