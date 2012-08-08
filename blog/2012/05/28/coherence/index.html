@@ -1,0 +1,350 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Coherence, modularity, and extensibility for typeclasses - pcwalton</title>
+  <meta name="author" content="Patrick Walton">
+
+  
+  <meta name="description" content="I&#8217;ve been experimenting with the design of a modification to Rust typeclasses. Because it&#8217;s always best to start with code, here&#8217;s &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://pcwalton.github.com/blog/2012/05/28/coherence">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <link href="/atom.xml" rel="alternate" title="pcwalton" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">pcwalton</a></h1>
+  
+    <h2>Occasional notes on Rust, Firefox, etc.</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:pcwalton.github.com" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Coherence, Modularity, and Extensibility for Typeclasses</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-05-28T22:12:00-07:00" pubdate data-updated="true">May 28<span>th</span>, 2012</time>
+        
+         | <a href="#disqus_thread">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>I&#8217;ve been experimenting with the design of a modification to Rust typeclasses. Because it&#8217;s always best to start with code, here&#8217;s a synopsis of what I have in mind:</p>
+
+<pre><code>mod A {
+    // Declaration of an interface:
+    iface to_str {
+        fn to_str() -&gt; str;
+
+        // Implementations for various types:
+
+        impl int {
+            fn to_str() -&gt; str {
+                ... implementation of to_str on ints ...
+            }
+        }
+
+        impl uint {
+            fn to_str() -&gt; str {
+                ... implementation of to_str on unsigned ints ...
+            }
+        }
+
+        ... more types here ...
+    }
+
+    // Define a class and declare that it implements to_str:
+    class foo : to_str {
+        fn to_str() {
+            ret "foo";
+        }
+    }
+}
+
+mod B {
+    import A::to_str;    // Must import the interface first, so
+                         // that the compiler can find the method
+                         // "to_str".
+
+    println(3.to_str()); // Calls the "to_str" defined above.
+}
+
+mod C {
+    let x = A::foo();    // Creates a foo object named "x".
+
+    x.to_str();          // Calls "to_str" on "x". Note that I
+                         // didn't have to import the "to_str"
+                         // method in this scope—since it was
+                         // defined inside the declaration of the
+                         // class "foo", it's obvious what the
+                         // implementation is.
+} 
+</code></pre>
+
+<p>Essentially, the implementations of an interface go <em>inside</em> the declaration of the interface, with one significant exception: a class is permitted to define implementations of interfaces in the body of the class. The compiler prohibits multiple implementations of the same interface on the same type using two simple rules: (1) implementations defined within an interface must be non-overlapping (i.e. there can&#8217;t be any types which match multiple implementations); and (2) a class can&#8217;t implement an interface that already defines an implementation which might itself match an instance of that class.</p>
+
+<p>The fact that the implementations go inside the interface is a little strange—it resembles the proposed Java defender methods, although it&#8217;s used for a completely different purpose—but I believe there is an important reason for it. It means that, if a programmer wants to look up the definition of a method call, he or she can simply figure out which interface it belongs to, which must always be in scope via an <code>import</code> statement, and then look at the declaration of the interface to find the method.</p>
+
+<p>Fundamentally, the guiding principles behind this design are that the typeclass system should be <em>coherent</em> and <em>modular</em> while supporting <em>extensibility</em>. Here are the definitions of these terms as I see them:</p>
+
+<p><em>Coherent</em> — A typeclass system is coherent if there exists at most one implementation of an interface for every type. Typeclass systems that don&#8217;t have this property have the <em>instance coherence</em> problem (or, as we called it when we independently stumbled across it, the &#8220;hash table problem&#8221;.)</p>
+
+<p><em>Modular</em> — A typeclass system is modular if the unit in the source code that carries the implementation for every method must be in the lexical scope of every call site that needs the implementation (or, for nominal types only, in the lexical scope of the declaration of the type). This is a little unclear, so some examples are in order. First, a simple one:</p>
+
+<pre><code>import vec::len;
+printf("The length is %u", [ 1, 2, 3 ].len());
+</code></pre>
+
+<p>In this example, we need the implementation for <code>len</code> in scope in order to make a direct call to the method <code>len</code>.</p>
+
+<p>Now a more complex example:</p>
+
+<pre><code>fn print_length&lt;T:len&gt;(x: T) {
+    printf("The length is %u", x.len());
+}
+
+import vec::len;
+print_length([ 1, 2, 3 ]);
+</code></pre>
+
+<p>Here, we need the definition of <code>len</code> in scope at the time we call <code>print_length</code>. Because <code>print_length</code> can print the length of any value that implements the <code>len</code> interface, it doesn&#8217;t intrinsically know which method to call. This information has to be provided by the caller of <code>print_length</code>. For this reason, the call to <code>print_length</code> requires the implementation <code>vec::len</code> to be in scope.</p>
+
+<p>In typeclass systems that aren&#8217;t modular, modules that define conflicting typeclass implementations usually can&#8217;t be linked together. For instance, in such a system, if module <code>A</code> implements <code>len</code> for vectors and module <code>B</code> independently implements <code>len</code> for vectors, then modules A and B can&#8217;t be used together in the same program. Obviously, this poses a hazard for large systems composed of many independently developed submodules.</p>
+
+<p><em>Extensibility</em> — A typeclass system facilitates extensibility if it&#8217;s possible for the programmer to introduce a new interface and provide implementations of that interface for existing types in the system. This is what makes typeclasses act like object extensions; it&#8217;s also what makes user-defined typeclasses useful on primitive types.</p>
+
+<p>Many languages have typeclass or interface systems, but to my knowledge none of the mainstream systems support all three of these features. For example:</p>
+
+<p><em>C++</em>—C++ concepts support extensibility, but aren&#8217;t coherent and are only somewhat modular. The C++ language permits out-of-line definition of custom operations on class and enum types. As an example, to provide an ordering on vectors of integers:</p>
+
+<pre><code>#include &lt;vector&gt;
+bool operator&lt;(std::vector&lt;int&gt; &amp;a, std::vector&lt;int&gt; &amp;b) {
+    ...
+}
+</code></pre>
+
+<p>In this way, C++ concepts are extensible. But there&#8217;s no check to ensure that there is only such definition in the program for each data type, so C++ concepts aren&#8217;t coherent. In this example, other namespaces can define <code>operator&lt;</code> over the same types.</p>
+
+<p>Generally, C++ scoping rules ensure that a function can never be called outside of its lexical scope. But there is a significant exception: argument-dependent lookup. With ADL, a function can be called outside of its lexical scope if that function was defined in the same scope as the type of one of its arguments. This feature was intended for extensibility, as it allows collections like <code>std::map</code> to pick up definitions of functions like <code>operator&lt;</code> even if the functions aren&#8217;t in scope. However, it clearly comes at the cost of modularity.</p>
+
+<p><em>Haskell</em>—Haskell typeclasses are coherent and support extensibility, but aren&#8217;t modular. Haskell programmers can define instances of typeclasses for any type in the system, but there can be only one instance of a typeclass for every type in the program. This can cause problems when two modules are linked together—if, say, module A defines <code>Show</code> of <code>int</code> and module B independently defines <code>Show</code> of <code>int</code>, modules A and B can&#8217;t be linked together.</p>
+
+<p><em>Java</em> and <em>Go</em>—Java interfaces are modular and coherent, but aren&#8217;t extensible. In Java, an implementation of an interface can be defined only within the package that declares the type. This means, in particular, that interfaces can&#8217;t be defined on primitive types. It also means that a module can&#8217;t define an interface and then declare an implementation of the interface on existing types without modifying the existing type. Go interfaces have the same limitations (unless you define an interface over methods that are already defined on the type in question).</p>
+
+<p><em>Scala</em>—Scala interfaces are modular but only mostly coherent; they also offer some support for extensibility. Unsurprisingly, interfaces in Scala are basically the same as interfaces in Java. The major difference is that, unlike Java, Scala provides a mechanism for extending classes with implementations of interfaces without having to modify the definition of the class—namely, implicits. This feature is extremely useful for extensibility; it also solves the problem of methods on primitive types in an elegant way. The trouble is that implicits are somewhat inconvenient to use; the programmer must define an implicit wrapper around the object, so the <code>this</code> parameter won&#8217;t refer to the object itself but rather to the wrapper. Equally importantly, implicits don&#8217;t enforce coherence—two modules can define two different implicits on the same type.</p>
+
+<p><em>Objective-C</em>—Objective-C categories support extensibility, but aren&#8217;t modular or coherent. In Objective-C, methods can be added to existing objects by defining a new category for that object and placing the methods within that category. The problems with categories are that method calls are all late-bound (precluding static scoping), and what happens when two modules that define conflicting category implementations are linked together is <em>undefined</em>: the resulting object might provide one implementation, or it might provide the other implementation. Either way, the resulting program is unlikely to work.</p>
+
+<p><em>Current Rust</em>—The current Rust implementation of typeclasses is modular and supports extensibility, but it doesn&#8217;t maintain coherence. Implementations are separate from interfaces in Rust (except for classes), and interfaces and implementations can both be defined over primitive types. The trouble is that there can be multiple conflicting implementations for typeclasses, which can lead to the instance coherence problem.</p>
+
+<p>So how does this proposed design compare?</p>
+
+<ul>
+<li><p>It offers coherence because there can be only one implementation of an interface for each type. For the implementations provided within the interface itself, we can check that they&#8217;re nonoverlapping. For the implementations defined with classes, we can check to ensure that the interface implementations don&#8217;t overlap with the implementations that the interface itself defined. Either way, the checks involved are simple and ensure that we meet the criterion for coherence.</p></li>
+<li><p>It offers modularity because the implementation either has to be imported as part of the interface (for implementations defined inside interfaces) or part of the nominal type (for class implementations). Consequently, it is never the case that two Rust crates cannot be linked together because of conflicting typeclass implementations.</p></li>
+<li><p>It offers extensibility because, when an interface is defined, implementations can be provided for any existing types without modifying the declarations of those types.</p></li>
+</ul>
+
+
+<p>Finally, it supports all three of these features while maintaining a minimal feature set.</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Patrick Walton</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-05-28T22:12:00-07:00" pubdate data-updated="true">May 28<span>th</span>, 2012</time>
+      
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://pcwalton.github.com/blog/2012/05/28/coherence/" data-via="" data-counturl="http://pcwalton.github.com/blog/2012/05/28/coherence/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2012/04/23/why-lifetimes/" title="Previous Post: Why Lifetimes?">&laquo; Why Lifetimes?</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2012/06/03/maximally-minimal-classes-for-rust/" title="Next Post: Maximally Minimal Classes for Rust">Maximally Minimal Classes for Rust &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2012/08/08/a-gentle-introduction-to-traits-in-rust/">A Gentle Introduction to Traits in Rust</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/06/03/maximally-minimal-classes-for-rust/">Maximally Minimal Classes for Rust</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/05/28/coherence/">Coherence, modularity, and extensibility for typeclasses</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/04/23/why-lifetimes/">Why Lifetimes?</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2012 - Patrick Walton -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'pcwalton';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://pcwalton.github.com/blog/2012/05/28/coherence/';
+        var disqus_url = 'http://pcwalton.github.com/blog/2012/05/28/coherence/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

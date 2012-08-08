@@ -1,101 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
 
-<!DOCTYPE html>
-<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
-<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
-<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
-<head>
-  <meta charset="utf-8">
-  <title>pcwalton</title>
-  <meta name="author" content="Patrick Walton">
-
-  
-  <meta name="description" content="Rust traits are one of the most interesting features of the language to me; they pack a lot of flexibility into a simple system. But because of the &hellip;">
-  
-
-  <!-- http://t.co/dKP3o1e -->
-  <meta name="HandheldFriendly" content="True">
-  <meta name="MobileOptimized" content="320">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-
-  
-  <link rel="canonical" href="http://pcwalton.github.com">
-  <link href="/favicon.png" rel="icon">
-  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
-  <script src="/javascripts/modernizr-2.0.js"></script>
-  <script src="/javascripts/ender.js"></script>
-  <script src="/javascripts/octopress.js" type="text/javascript"></script>
-  <link href="/atom.xml" rel="alternate" title="pcwalton" type="application/atom+xml">
-  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
-<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
-<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
-
-  
-
-</head>
-
-<body   >
-  <header role="banner"><hgroup>
-  <h1><a href="/">pcwalton</a></h1>
-  
-    <h2>Occasional notes on Rust, Firefox, etc.</h2>
-  
-</hgroup>
-
-</header>
-  <nav role="navigation"><ul class="subscription" data-subscription="rss">
-  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
-  
-</ul>
-  
-<form action="http://google.com/search" method="get">
-  <fieldset role="search">
-    <input type="hidden" name="q" value="site:pcwalton.github.com" />
-    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
-  </fieldset>
-</form>
-  
-<ul class="main-navigation">
-  <li><a href="/">Blog</a></li>
-  <li><a href="/blog/archives">Archives</a></li>
-</ul>
-
-</nav>
-  <div id="main">
-    <div id="content">
-      <div class="blog-index">
-  
-  
-  
-    <article>
-      
-  <header>
+  <title><![CDATA[pcwalton]]></title>
+  <link href="http://pcwalton.github.com/atom.xml" rel="self"/>
+  <link href="http://pcwalton.github.com/"/>
+  <updated>2012-08-08T11:02:14-07:00</updated>
+  <id>http://pcwalton.github.com/</id>
+  <author>
+    <name><![CDATA[Patrick Walton]]></name>
     
-      <h1 class="entry-title"><a href="/blog/2012/08/08/a-gentle-introduction-to-traits-in-rust/">A Gentle Introduction to Traits in Rust</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
 
   
-
-
-<time datetime="2012-08-08T10:46:00-07:00" pubdate data-updated="true">Aug 8<span>th</span>, 2012</time>
-        
-         | <a href="/blog/2012/08/08/a-gentle-introduction-to-traits-in-rust/#disqus_thread">Comments</a>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>Rust traits are one of the most interesting features of the language to me; they pack a lot of flexibility into a simple system. But because of the rapid pace of development of the language, there&#8217;s been a fair amount of confusion as to how they work. As such, I figured I&#8217;d write up a quick tutorial explaining why and how to use them.</p>
+  <entry>
+    <title type="html"><![CDATA[A Gentle Introduction to Traits in Rust]]></title>
+    <link href="http://pcwalton.github.com/blog/2012/08/08/a-gentle-introduction-to-traits-in-rust/"/>
+    <updated>2012-08-08T10:46:00-07:00</updated>
+    <id>http://pcwalton.github.com/blog/2012/08/08/a-gentle-introduction-to-traits-in-rust</id>
+    <content type="html"><![CDATA[<p>Rust traits are one of the most interesting features of the language to me; they pack a lot of flexibility into a simple system. But because of the rapid pace of development of the language, there&#8217;s been a fair amount of confusion as to how they work. As such, I figured I&#8217;d write up a quick tutorial explaining why and how to use them.</p>
 
 <p>This tutorial assumes only basic knowledge of C-like languages, so I&#8217;ll try to explain everything specific to Rust that might be unclear along the way. Also note that a couple of these features are unimplemented, so if you try this today the syntax will be a little different.</p>
 
@@ -279,44 +202,15 @@ save("monster.txt", &amp;monster);
 
 
 <p>That&#8217;s about all there is to traits. Traits are essentially Rust&#8217;s object system, but they&#8217;re simpler than many object systems and integrate especially well with generics.</p>
-</div>
+]]></content>
+  </entry>
   
-  
-
-
-    </article>
-  
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2012/06/03/maximally-minimal-classes-for-rust/">Maximally Minimal Classes for Rust</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2012-06-03T14:35:00-07:00" pubdate data-updated="true">Jun 3<span>rd</span>, 2012</time>
-        
-         | <a href="/blog/2012/06/03/maximally-minimal-classes-for-rust/#disqus_thread">Comments</a>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>Now that classes have been implemented as per the original proposal, the other Rusters and I have been starting to get a feel for the way they work out in practice. The results are positive, but not optimal. Although they definitely succeeded in avoiding the rigidity of traditional object-oriented languages like Java, they still have two basic problems: (1) they feel somewhat out of place with the rest of the language; and (2) they&#8217;re still too heavyweight. Nevertheless, the functionality that they enabled is important, and we shouldn&#8217;t sacrifice it.</p>
+  <entry>
+    <title type="html"><![CDATA[Maximally Minimal Classes for Rust]]></title>
+    <link href="http://pcwalton.github.com/blog/2012/06/03/maximally-minimal-classes-for-rust/"/>
+    <updated>2012-06-03T14:35:00-07:00</updated>
+    <id>http://pcwalton.github.com/blog/2012/06/03/maximally-minimal-classes-for-rust</id>
+    <content type="html"><![CDATA[<p>Now that classes have been implemented as per the original proposal, the other Rusters and I have been starting to get a feel for the way they work out in practice. The results are positive, but not optimal. Although they definitely succeeded in avoiding the rigidity of traditional object-oriented languages like Java, they still have two basic problems: (1) they feel somewhat out of place with the rest of the language; and (2) they&#8217;re still too heavyweight. Nevertheless, the functionality that they enabled is important, and we shouldn&#8217;t sacrifice it.</p>
 
 <p>Language design tends to go in cycles: we grow the language to accommodate new functionality, then shrink the language as we discover ways in which the features can be orthogonally integrated into the rest of the system. Classes seem to me to be on the upward trajectory of complexity; now it&#8217;s time to shrink them down. At the same time, we shouldn&#8217;t sacrifice the functionality that they enable.</p>
 
@@ -523,44 +417,15 @@ impl monster for @monster {
 <p>I prefer option (4), but, as mentioned before, that&#8217;s a separate issue.</p>
 
 <p>Finally, with nearly all of the special functionality of classes removed, it&#8217;s worth asking why records continue to exist. Indeed, I&#8217;ve been thinking for a while that structural records should be removed from the language, but the reasons for this tie into a deeper discussion on structural and nominal types and deserve their own blog post.</p>
-</div>
+]]></content>
+  </entry>
   
-  
-
-
-    </article>
-  
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2012/05/28/coherence/">Coherence, Modularity, and Extensibility for Typeclasses</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2012-05-28T22:12:00-07:00" pubdate data-updated="true">May 28<span>th</span>, 2012</time>
-        
-         | <a href="/blog/2012/05/28/coherence/#disqus_thread">Comments</a>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>I&#8217;ve been experimenting with the design of a modification to Rust typeclasses. Because it&#8217;s always best to start with code, here&#8217;s a synopsis of what I have in mind:</p>
+  <entry>
+    <title type="html"><![CDATA[Coherence, modularity, and extensibility for typeclasses]]></title>
+    <link href="http://pcwalton.github.com/blog/2012/05/28/coherence/"/>
+    <updated>2012-05-28T22:12:00-07:00</updated>
+    <id>http://pcwalton.github.com/blog/2012/05/28/coherence</id>
+    <content type="html"><![CDATA[<p>I&#8217;ve been experimenting with the design of a modification to Rust typeclasses. Because it&#8217;s always best to start with code, here&#8217;s a synopsis of what I have in mind:</p>
 
 <pre><code>mod A {
     // Declaration of an interface:
@@ -678,44 +543,15 @@ bool operator&lt;(std::vector&lt;int&gt; &amp;a, std::vector&lt;int&gt; &amp;b) 
 
 
 <p>Finally, it supports all three of these features while maintaining a minimal feature set.</p>
-</div>
+]]></content>
+  </entry>
   
-  
-
-
-    </article>
-  
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2012/04/23/why-lifetimes/">Why Lifetimes?</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2012-04-23T23:19:00-07:00" pubdate data-updated="true">Apr 23<span>rd</span>, 2012</time>
-        
-         | <a href="/blog/2012/04/23/why-lifetimes/#disqus_thread">Comments</a>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>One of the most unique new features of Rust is its slowly-growing support for <em>regions</em>&mdash;or <em>lifetimes</em>, as some of us core developers like to call them. As lifetimes aren&#8217;t found in any mainstream languages, I thought I&#8217;d expand upon why we want them and how they can be used to improve memory management for performance (especially interactive performance) without sacrificing safety. In this first post I&#8217;ll explain why existing memory models weren&#8217;t enough and why we went searching for alternatives. Here I&#8217;m assuming basic knowledge of garbage collection, reference counting, and <code>malloc</code>/<code>free</code>, but nothing more.</p>
+  <entry>
+    <title type="html"><![CDATA[Why Lifetimes?]]></title>
+    <link href="http://pcwalton.github.com/blog/2012/04/23/why-lifetimes/"/>
+    <updated>2012-04-23T23:19:00-07:00</updated>
+    <id>http://pcwalton.github.com/blog/2012/04/23/why-lifetimes</id>
+    <content type="html"><![CDATA[<p>One of the most unique new features of Rust is its slowly-growing support for <em>regions</em>&mdash;or <em>lifetimes</em>, as some of us core developers like to call them. As lifetimes aren&#8217;t found in any mainstream languages, I thought I&#8217;d expand upon why we want them and how they can be used to improve memory management for performance (especially interactive performance) without sacrificing safety. In this first post I&#8217;ll explain why existing memory models weren&#8217;t enough and why we went searching for alternatives. Here I&#8217;m assuming basic knowledge of garbage collection, reference counting, and <code>malloc</code>/<code>free</code>, but nothing more.</p>
 
 <p>The programming models that the current crop of mainstream programming languages expose can be divided pretty evenly into two camps: <em>explicitly-managed</em> environments and <em>garbage-collected</em> enivornments. By far, the most common programming languages built around explicitly-managed environments are C, C++, and Objective-C, and explicit memory management is so associated with these languages that it&#8217;s often just called &#8220;the C memory model&#8221;. Almost all other languages in mainstream use are garbage collected&mdash;Java, C#, JavaScript, Python, Ruby, Lisp, Perl, and tons of other languages all fall into this camp. (Note that here I&#8217;m using &#8220;garbage collection&#8221; in the general sense to mean automatic memory management; some of these languages don&#8217;t have <em>tracing</em> garbage collection and instead use reference counting.)</p>
 
@@ -736,94 +572,7 @@ bool operator&lt;(std::vector&lt;int&gt; &amp;a, std::vector&lt;int&gt; &amp;b) 
 <p>The end result of this is that we seem to be trapped between the rock of unpredictable performance and the hard place of programmer burdens and security vulnerabilities. The current set of commonly-used languages don&#8217;t provide solutions here.</p>
 
 <p>Fortunately, the research landscape offers some promising potential solutions, which I&#8217;ll cover next time.</p>
-</div>
+]]></content>
+  </entry>
   
-  
-
-
-    </article>
-  
-  <div class="pagination">
-    
-    <a href="/blog/archives">Blog Archives</a>
-    
-  </div>
-</div>
-<aside class="sidebar">
-  
-    <section>
-  <h1>Recent Posts</h1>
-  <ul id="recent_posts">
-    
-      <li class="post">
-        <a href="/blog/2012/08/08/a-gentle-introduction-to-traits-in-rust/">A Gentle Introduction to Traits in Rust</a>
-      </li>
-    
-      <li class="post">
-        <a href="/blog/2012/06/03/maximally-minimal-classes-for-rust/">Maximally Minimal Classes for Rust</a>
-      </li>
-    
-      <li class="post">
-        <a href="/blog/2012/05/28/coherence/">Coherence, modularity, and extensibility for typeclasses</a>
-      </li>
-    
-      <li class="post">
-        <a href="/blog/2012/04/23/why-lifetimes/">Why Lifetimes?</a>
-      </li>
-    
-  </ul>
-</section>
-
-
-
-
-
-
-  
-</aside>
-
-    </div>
-  </div>
-  <footer role="contentinfo"><p>
-  Copyright &copy; 2012 - Patrick Walton -
-  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
-</p>
-
-</footer>
-  
-
-<script type="text/javascript">
-      var disqus_shortname = 'pcwalton';
-      
-        
-        var disqus_script = 'count.js';
-      
-    (function () {
-      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
-      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
-      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
-    }());
-</script>
-
-
-
-
-
-
-
-  <script type="text/javascript">
-    (function(){
-      var twitterWidgets = document.createElement('script');
-      twitterWidgets.type = 'text/javascript';
-      twitterWidgets.async = true;
-      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
-      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
-    })();
-  </script>
-
-
-
-
-
-</body>
-</html>
+</feed>

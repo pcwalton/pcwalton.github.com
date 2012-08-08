@@ -1,0 +1,414 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>A Gentle Introduction to Traits in Rust - pcwalton</title>
+  <meta name="author" content="Patrick Walton">
+
+  
+  <meta name="description" content="Rust traits are one of the most interesting features of the language to me; they pack a lot of flexibility into a simple system. But because of the &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://pcwalton.github.com/blog/2012/08/08/a-gentle-introduction-to-traits-in-rust">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <link href="/atom.xml" rel="alternate" title="pcwalton" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">pcwalton</a></h1>
+  
+    <h2>Occasional notes on Rust, Firefox, etc.</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:pcwalton.github.com" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">A Gentle Introduction to Traits in Rust</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-08-08T10:46:00-07:00" pubdate data-updated="true">Aug 8<span>th</span>, 2012</time>
+        
+         | <a href="#disqus_thread">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>Rust traits are one of the most interesting features of the language to me; they pack a lot of flexibility into a simple system. But because of the rapid pace of development of the language, there&#8217;s been a fair amount of confusion as to how they work. As such, I figured I&#8217;d write up a quick tutorial explaining why and how to use them.</p>
+
+<p>This tutorial assumes only basic knowledge of C-like languages, so I&#8217;ll try to explain everything specific to Rust that might be unclear along the way. Also note that a couple of these features are unimplemented, so if you try this today the syntax will be a little different.</p>
+
+<h1>Simple implementations</h1>
+
+<p>Let&#8217;s suppose I&#8217;m writing a game. I&#8217;ll start by defining a struct <code>Monster</code> and a struct <code>Player</code> like this:</p>
+
+<pre><code>struct Monster {
+    name: &amp;str;      // `&amp;str` is a reference to a string
+    mut health: int; // `mut` indicates that the health can be changed
+}
+
+struct Player {
+    mut health: int;
+}
+</code></pre>
+
+<p>Now I can create instances of each:</p>
+
+<pre><code>fn main() {  // `fn` defines a function
+    let monster = Monster {
+        name: "Gelatinous Cube",
+        health: 50
+    };
+    let player = Player {
+        health: 100
+    };
+}
+</code></pre>
+
+<p>Without some functionality, this isn&#8217;t a particularly interesting game. So let&#8217;s add a method to <code>Monster</code>:</p>
+
+<pre><code>impl Monster {
+    fn attack(&amp;self, player: &amp;Player) {
+        // fmt! is string formatting; this prints "Gelatinous Cube hits you!"
+        io::println(fmt!("%s hits you!", self.name));
+        player.health -= 10;
+    }
+}
+</code></pre>
+
+<p>And I can call it this way, inside <code>main</code>:</p>
+
+<pre><code>monster.attack(&amp;player);
+</code></pre>
+
+<p>There are several things to note here.</p>
+
+<ul>
+<li><p>References are explicit in Rust: the <code>&amp;</code> sigil indicates that the method <code>attack</code> takes a reference to the player, not the player itself. If I didn&#8217;t write that, then the player would be copied into the method instead (and we&#8217;d get a compiler warning, because this indicates a bug).</p></li>
+<li><p>I use the keyword <code>impl</code> to declare methods for a type. <code>impl</code> declarations can appear  anywhere in the module that declared the type. The <code>struct</code> and <code>impl</code> pair appears a lot in Rust code; it nicely separates out data from implementation. Objective-C and C++ programmers will find this familiar.</p></li>
+<li><p>Within an implementation, functions with a <code>self</code> parameter become methods. Python programmers will find this &#8220;explicit self&#8221; familiar. Because references are explicit in Rust, you specify how <code>self</code> is supposed to be passed; in this case, by reference (<code>&amp;self</code>).</p></li>
+</ul>
+
+
+<h1>Generics</h1>
+
+<p>Now that we have basic implementations covered, let&#8217;s look at something completely different: generics. (We&#8217;ll come back to implementations later on.) Like many other languages, Rust features generic functions: functions that can operate on many different types. For example, here&#8217;s a function that returns true if a vector is empty:</p>
+
+<pre><code>// Vectors are written with square brackets around the type; e.g. a vector of
+// ints is written `[int]`.
+fn is_empty&lt;T&gt;(v: &amp;[T]) -&gt; bool {
+    return v.len() == 0;
+}
+</code></pre>
+
+<p>The generic type parameters are written inside the angle brackets (<code>&lt;</code> and <code>&gt;</code>), after the function name.</p>
+
+<p>There&#8217;s nothing much more to say here; generics are pretty simple. In this form, however, they&#8217;re pretty limited, as we&#8217;ll see.</p>
+
+<h1>Limitations of generics</h1>
+
+<p>Let&#8217;s go back to our game example. Suppose I want to add functionality to save the state of the game to disk in <a href="http://en.wikipedia.org/wiki/JSON">JSON</a>. I&#8217;ll implement some methods on <code>Monster</code> and <code>Player</code> to do this:</p>
+
+<pre><code>impl Monster {
+    // `~str` means "a pointer to a string that'll be automatically freed"
+    fn to_json(&amp;self) -&gt; ~str {
+        return fmt!("{ name: \"%s\", health: %d }", self.name, self.health);
+    }
+}
+
+impl Player {
+    fn to_json(&amp;self) -&gt; ~str {
+        return fmt!("{ health: %d }", self.health);
+    }
+}
+</code></pre>
+
+<p>Now imagine that I wanted a function to save any actor (either a monster or a player) into a file. Because monsters and players are different types, I need to use a generic function to handle both. My first attempt at the function looks like this:</p>
+
+<pre><code>fn save&lt;T&gt;(filename: &amp;str, actor: &amp;T) {
+    // Because the writer returns an error code, I use .get() to mean "require
+    // that this succeeded, and abort the program if it didn't".
+    let writer = io::file_writer(filename, [ io::create, io::truncate ]).get();
+    writer.write(actor.to_json());
+    // Because of RAII, the file will automatically be closed.
+}
+</code></pre>
+
+<p>Uh-oh. This doesn&#8217;t compile. I get the following error: &#8220;attempted access of field <code>to_json</code> on type <code>&amp;T</code>, but no public field or method with that name was found&#8221;.</p>
+
+<p>What the Rust compiler is telling me is that it doesn&#8217;t know that the type <code>T</code> in this function contains the method <code>to_json</code>. And, in fact, it might not. As written above, it&#8217;d be perfectly legal to call <code>save</code> on any type at all:</p>
+
+<pre><code>struct Penguin {
+    name: &amp;str;
+}
+
+save("penguin.txt", &amp;Penguin { name: "Fred" });
+// But how do I convert penguins to JSON?
+</code></pre>
+
+<p>So I&#8217;m stuck. But Rust provides a solution: traits.</p>
+
+<h1>Trait declaration</h1>
+
+<p>Traits are the way to tell the Rust compiler about <em>functionality that a type must provide</em>. They&#8217;re very similar in spirit to interfaces in Java, C#, and Go, and are similar in implementation to typeclasses in Haskell. They provide the solution to the problem I&#8217;m facing: I need to tell the Rust compiler, first of all, that some types can be converted to JSON, and, additionally, for the types that can be converted to JSON, how to do it.</p>
+
+<p>To define a trait, I simply use the <code>trait</code> keyword:</p>
+
+<pre><code>trait ToJSON {
+    fn to_json(&amp;self) -&gt; ~str;
+}
+</code></pre>
+
+<p>This declares a trait named <code>ToJSON</code>, with one method that all types that implement the trait must define. That method is named <code>to_json</code>, and it takes its <code>self</code> parameter by reference.</p>
+
+<p>Now I can define implementations of <code>ToJSON</code> for the various types I&#8217;m interested in. These implementations are exactly the same as above, except that we add <code>: ToJSON</code>.</p>
+
+<pre><code>impl Monster : ToJSON {
+    // `~str` means "a pointer to a string that'll be automatically freed"
+    fn to_json(&amp;self) -&gt; ~str {
+        return fmt!("{ name: \"%s\", health: %d }", self.name, self.health);
+    }
+}
+
+impl Player : ToJSON {
+    fn to_json(&amp;self) -&gt; ~str {
+        return fmt!("{ health: %d }", self.health);
+    }
+}
+</code></pre>
+
+<p>That&#8217;s all there is to it. Now I can modify the <code>save</code> function so that it does what I want.</p>
+
+<h1>Trait usage</h1>
+
+<p>Recall that the reason why the <code>save</code> function didn&#8217;t compile is that the Rust compiler didn&#8217;t know that the <code>T</code> type contained a <code>to_json</code> method. What I need is some way to tell the compiler that this function only accepts types that contain the methods I need to call. This is accomplished through <em>trait restrictions</em>. I modify the <code>save</code> function as follows:</p>
+
+<pre><code>fn save&lt;T:ToJSON&gt;(filename: &amp;str, actor: &amp;T) {
+    let writer = io::file_writer(filename, [ io::create, io::truncate ]).get();
+    writer.write(actor.to_json());
+}
+</code></pre>
+
+<p>Note the addition of <code>:ToJSON</code> after the type parameter. This indicates that the function can only be called with types that implement the trait.</p>
+
+<p>Now these calls to <code>save</code> will compile:</p>
+
+<pre><code>save("player.txt", &amp;player);
+save("monster.txt", &amp;monster);
+</code></pre>
+
+<p>But this call will not:</p>
+
+<pre><code>save("penguin.txt", &amp;Penguin { name: "Fred" });
+</code></pre>
+
+<p>I get the error &#8220;failed to find an implementation of trait <code>ToJSON</code> for <code>Penguin</code>&#8221;, just as expected.</p>
+
+<h1>Summing up</h1>
+
+<p>These are the basic features of traits and comprise most of what Rust programmers will need to know. There are only a few more features beyond these, which I&#8217;ll mention briefly:</p>
+
+<ul>
+<li><p><em>Special traits</em>. Some traits are known to the compiler and represent the built-in operations. Most notably, this includes the ubiquitous <code>copy</code> trait, which invokes the copy operation that occurs when you assign with <code>let x = y</code>. You&#8217;ll see <code>T:copy</code> in many generic functions for this reason. Other special traits include <code>send</code>, which is a trait that indicates the type is sendable, and <code>add</code>, <code>sub</code>, etc, which indicate the built-in arithmetic operators. The key is that, in all cases, traits simply specify <em>what a generic type can do</em>; when you want to do something with a type parameter like <code>T</code>, you specify a trait.</p></li>
+<li><p><em>Generic traits</em>. Traits can be generic, which is occasionally useful.</p></li>
+<li><p><em>Default implementations</em>. It&#8217;s often helpful for traits to provide default implementations of their methods that take over when the type doesn&#8217;t provide an implementation of its own. For example, the default implementation of <code>to_json()</code> might want to use the Rust reflection API to automatically create JSON for any type, even if that type doesn&#8217;t manually implement the <code>to_json()</code> method. (Note that this feature is currently being implemented.)</p></li>
+<li><p><em>Trait composition</em>. Sometimes we want one trait to include another trait. For example, the <code>Num</code> trait, which all number types in the language implement, obviously includes addition, subtraction, multiplication, etc. Trait composition allows traits to be &#8220;glued together&#8221; in this way. Note that this isn&#8217;t <em>inheritance</em>; it&#8217;s simply a convenience that allows trait methods to be combined together, like a mixin. (This is not fully implemented yet.)</p></li>
+<li><p><em>First-class trait values</em>. Rarely, it&#8217;s necessary to have a trait be a first-class value, like in Java or Go, instead of attached to a generic type parameter. This doesn&#8217;t come up particularly often, but Rust does support it in the rare cases in which it&#8217;s needed. Idiomatic Rust uses generics instead of Java-like interfaces.</p></li>
+</ul>
+
+
+<p>That&#8217;s about all there is to traits. Traits are essentially Rust&#8217;s object system, but they&#8217;re simpler than many object systems and integrate especially well with generics.</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Patrick Walton</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-08-08T10:46:00-07:00" pubdate data-updated="true">Aug 8<span>th</span>, 2012</time>
+      
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://pcwalton.github.com/blog/2012/08/08/a-gentle-introduction-to-traits-in-rust/" data-via="" data-counturl="http://pcwalton.github.com/blog/2012/08/08/a-gentle-introduction-to-traits-in-rust/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2012/06/03/maximally-minimal-classes-for-rust/" title="Previous Post: Maximally Minimal Classes for Rust">&laquo; Maximally Minimal Classes for Rust</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2012/08/08/a-gentle-introduction-to-traits-in-rust/">A Gentle Introduction to Traits in Rust</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/06/03/maximally-minimal-classes-for-rust/">Maximally Minimal Classes for Rust</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/05/28/coherence/">Coherence, modularity, and extensibility for typeclasses</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/04/23/why-lifetimes/">Why Lifetimes?</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2012 - Patrick Walton -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'pcwalton';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://pcwalton.github.com/blog/2012/08/08/a-gentle-introduction-to-traits-in-rust/';
+        var disqus_url = 'http://pcwalton.github.com/blog/2012/08/08/a-gentle-introduction-to-traits-in-rust/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>
