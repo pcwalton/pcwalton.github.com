@@ -9,7 +9,7 @@
   <meta name="author" content="Patrick Walton">
 
   
-  <meta name="description" content="Rust traits are one of the most interesting features of the language to me; they pack a lot of flexibility into a simple system. But because of the &hellip;">
+  <meta name="description" content="Rust traits pack a lot of flexibility into a simple system, and they&#8217;re one of my favorite features of the language. But as a result of the &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -95,13 +95,13 @@
   </header>
 
 
-  <div class="entry-content"><p>Rust traits are one of the most interesting features of the language to me; they pack a lot of flexibility into a simple system. But because of the rapid pace of development of the language, there&#8217;s been a fair amount of confusion as to how they work. As such, I figured I&#8217;d write up a quick tutorial explaining why and how to use them.</p>
+  <div class="entry-content"><p>Rust traits pack a lot of flexibility into a simple system, and they&#8217;re one of my favorite features of the language. But as a result of the rapid pace of the language&#8217;s development, there&#8217;s been a fair amount of confusion as to how they work. As such, I figured I&#8217;d write up a quick tutorial explaining why and how to use them.</p>
 
 <p>This tutorial assumes only basic knowledge of C-like languages, so I&#8217;ll try to explain everything specific to Rust that might be unclear along the way. Also note that a couple of these features are unimplemented, so if you try this today the syntax will be a little different.</p>
 
 <h1>Simple implementations</h1>
 
-<p>Let&#8217;s suppose I&#8217;m writing a game. I&#8217;ll start by defining a struct <code>Monster</code> and a struct <code>Player</code> like this:</p>
+<p>In keeping with the theme of my previous blog posts on classes, let&#8217;s start by writing a game. I&#8217;ll start by defining a struct <code>Monster</code> and a struct <code>Player</code> like this:</p>
 
 <pre><code>struct Monster {
     name: &amp;str;      // `&amp;str` is a reference to a string
