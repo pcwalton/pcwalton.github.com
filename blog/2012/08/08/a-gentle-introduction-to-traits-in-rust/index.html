@@ -96,7 +96,7 @@
 
 <p>This tutorial assumes only basic knowledge of C-like languages, so I&#8217;ll try to explain everything specific to Rust that might be unclear along the way. Also note that a couple of these features are unimplemented, so if you try this today the syntax will be a little different.</p>
 
-<h1>Simple implementations</h1>
+<h2>Simple implementations</h2>
 
 <p>In keeping with the theme of my previous blog posts on classes, let&#8217;s start by writing a game. I&#8217;ll start by defining a struct <code>Monster</code> and a struct <code>Player</code> like this:</p>
 
@@ -148,7 +148,7 @@ struct Player {
 </ul>
 
 
-<h1>Generics</h1>
+<h2>Generics</h2>
 
 <p>Now that we have basic implementations covered, let&#8217;s look at something completely different: generics. (We&#8217;ll come back to implementations later on.) Like many other languages, Rust features generic functions: functions that can operate on many different types. For example, here&#8217;s a function that returns true if a vector is empty:</p>
 
@@ -163,7 +163,7 @@ fn is_empty&lt;T&gt;(v: &amp;[T]) -&gt; bool {
 
 <p>There&#8217;s nothing much more to say here; generics are pretty simple. In this form, however, they&#8217;re pretty limited, as we&#8217;ll see.</p>
 
-<h1>Limitations of generics</h1>
+<h2>Limitations of generics</h2>
 
 <p>Let&#8217;s go back to our game example. Suppose I want to add functionality to save the state of the game to disk in <a href="http://en.wikipedia.org/wiki/JSON">JSON</a>. I&#8217;ll implement some methods on <code>Monster</code> and <code>Player</code> to do this:</p>
 
@@ -206,7 +206,7 @@ save("penguin.txt", &amp;Penguin { name: "Fred" });
 
 <p>So I&#8217;m stuck. But Rust provides a solution: traits.</p>
 
-<h1>Trait declaration</h1>
+<h2>Trait declaration</h2>
 
 <p>Traits are the way to tell the Rust compiler about <em>functionality that a type must provide</em>. They&#8217;re very similar in spirit to interfaces in Java, C#, and Go, and are similar in implementation to typeclasses in Haskell. They provide the solution to the problem I&#8217;m facing: I need to tell the Rust compiler, first of all, that some types can be converted to JSON, and, additionally, for the types that can be converted to JSON, how to do it.</p>
 
@@ -237,7 +237,7 @@ impl Player : ToJSON {
 
 <p>That&#8217;s all there is to it. Now I can modify the <code>save</code> function so that it does what I want.</p>
 
-<h1>Trait usage</h1>
+<h2>Trait usage</h2>
 
 <p>Recall that the reason why the <code>save</code> function didn&#8217;t compile is that the Rust compiler didn&#8217;t know that the <code>T</code> type contained a <code>to_json</code> method. What I need is some way to tell the compiler that this function only accepts types that contain the methods I need to call. This is accomplished through <em>trait restrictions</em>. I modify the <code>save</code> function as follows:</p>
 
@@ -262,7 +262,7 @@ save("monster.txt", &amp;monster);
 
 <p>I get the error &#8220;failed to find an implementation of trait <code>ToJSON</code> for <code>Penguin</code>&#8221;, just as expected.</p>
 
-<h1>Summing up</h1>
+<h2>Summing up</h2>
 
 <p>These are the basic features of traits and comprise most of what Rust programmers will need to know. There are only a few more features beyond these, which I&#8217;ll mention briefly:</p>
 
