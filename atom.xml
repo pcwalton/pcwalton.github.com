@@ -4,7 +4,7 @@
   <title><![CDATA[pcwalton]]></title>
   <link href="http://pcwalton.github.com/atom.xml" rel="self"/>
   <link href="http://pcwalton.github.com/"/>
-  <updated>2012-12-27T02:35:06-08:00</updated>
+  <updated>2012-12-28T19:08:25-08:00</updated>
   <id>http://pcwalton.github.com/</id>
   <author>
     <name><![CDATA[Patrick Walton]]></name>
@@ -12,6 +12,114 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[A Tour of Vector Representations]]></title>
+    <link href="http://pcwalton.github.com/blog/2012/12/28/a-tour-of-vectors/"/>
+    <updated>2012-12-28T18:43:00-08:00</updated>
+    <id>http://pcwalton.github.com/blog/2012/12/28/a-tour-of-vectors</id>
+    <content type="html"><![CDATA[<p>One aspect of Rust that&#8217;s often confusing to newcomers is its treatment of strings and vectors (also known as arrays or lists). As a result of its focus on systems programming, Rust has a somewhat lower-level concept of a vector than most other languages do. As part of an overall goal to make Rust easy to understand, I thought I&#8217;d write up a quick tour of the way other languages&#8217; vectors work from the perspective of the machine in order to make it easier to map these concepts into Rust.</p>
+
+<p>There are three common models that I&#8217;ve observed in use—for lack of better terminology, I&#8217;ll call them the Java model, the Python model, and the C++ model. (For brevity, I&#8217;ve omitted fixed-size, stack-allocated arrays, since these are very limited.) Most languages build upon one of these three. In a subsequent blog post, I&#8217;ll explain how Rust&#8217;s system differs from these and how the programmer can build the equivalents of each of these models in Rust.</p>
+
+<p>We&#8217;ll start with the Java model. Java&#8217;s basic array type has a fixed size when created and cannot be changed afterward. Arrays in Java are always allocated on the Java heap. For example, consider the following line of code:</p>
+
+<pre><code>int[] a = { 1, 2, 3, 4, 5 };
+</code></pre>
+
+<p>After this code is executed, the memory of the running program looks like this:</p>
+
+<p><img src="http://i.imgur.com/zeztF.png" alt="image" /></p>
+
+<p>The cell highlighted in red is the value of type <code>int[]</code>. It&#8217;s a <em>reference type</em>, which means that it represents a <em>reference</em> to the data rather than the data itself. This is important when assigning one array value to another. For instance, we execute this code:</p>
+
+<pre><code>int[] b = a;
+</code></pre>
+
+<p>And now the memory looks like this:</p>
+
+<p><img src="http://i.imgur.com/0t6xB.png" alt="image" /></p>
+
+<p>Both values are pointing at the same underlying storage. We call this <em>aliasing</em> the array buffer. In Java, any number of values can point to same the underlying array storage. Because of this, the language has no idea how many pointers point to the storage at compile time; therefore, to determine when to clean up the storage, Java uses garbage collection. Periodically, the entire heap is scanned to determine whether any references to the array storage remain, and if there are none, the buffer is freed.</p>
+
+<p>Now this model is simple and fast, but, since the arrays have a fixed size, the programmer can&#8217;t add new elements to them once they&#8217;re created. This is a very common thing to want, so Java provides another type, <code>java.util.ArrayList</code>, for this. As it turns out, the model used by Java&#8217;s <code>ArrayList</code> is essentially the same model that Python uses for all of its lists.</p>
+
+<p>Let&#8217;s look at this model more closely. Consider this statement in Python:</p>
+
+<pre><code>a = [ 1, 2, 3, 4, 5 ]
+</code></pre>
+
+<p>Once this is executed, the memory looks like this:</p>
+
+<p><img src="http://i.imgur.com/xXjOU.png" alt="image" /></p>
+
+<p>As in Java, the cell highlighted in red (<code>a</code>) is the value that actually has the Python type <code>list</code>. We can see this if we assign <code>a</code> to <code>b</code>:</p>
+
+<pre><code>b = a
+</code></pre>
+
+<p><img src="http://i.imgur.com/jLJRj.png" alt="image" /></p>
+
+<p>Obviously, the disadvantage of this model is that it requires two allocations instead of one. The advantage of this model is that new elements can be added to the end of the vector, and all outstanding references to the vector will see the new elements. Suppose that the vector had capacity 5 when initially created, so that no room exists to add new elements onto the end of the existing storage. Then when we execute the following line:</p>
+
+<pre><code>b.append(6)
+</code></pre>
+
+<p>The memory looks like this:</p>
+
+<p><img src="http://i.imgur.com/U0g4w.png" alt="image" /></p>
+
+<p>Here, Python has created a new and larger allocation for the storage, copied the existing elements over, and freed the old allocation (indicated in gray). Because <code>a</code> and <code>b</code> both point to the <code>PyListObject</code> allocation, which has <em>not</em> changed, they both see the new elements:</p>
+
+<pre><code>&gt;&gt;&gt; a
+[1, 2, 3, 4, 5, 6]
+&gt;&gt;&gt; b
+[1, 2, 3, 4, 5, 6]
+</code></pre>
+
+<p>In summary, Python&#8217;s model sacrifices some efficiency at runtime because it requires both garbage collection and two allocations, but it gains flexibility by permitting both aliasing and append operations.</p>
+
+<p>Turning our attention to C++, we find that it has a different model from both Python and Java: it sacrifices aliasing but retains the ability for vectors to grow. For instance, after this C++ code executes:</p>
+
+<pre><code>std::vector a;
+a.push_back(1);
+a.push_back(2);
+a.push_back(3);
+a.push_back(4);
+a.push_back(5);
+</code></pre>
+
+<p>The memory looks like this:</p>
+
+<p><img src="http://i.imgur.com/dEQG3.png" alt="image" /></p>
+
+<p>As before, the red box indicates the value of type <code>std::vector</code>. It is stored directly on the stack. It is still fundamentally a reference type, just as vectors in Python and Java are; note that the underlying storage does not have the type <code>std::vector&lt;int&gt;</code> but instead has the type <code>int[]</code> (a plain old C array).</p>
+
+<p>Like Python vectors, C++ vectors can grow. After executing this line:</p>
+
+<pre><code>a.push_back(6);
+</code></pre>
+
+<p>The STL does this (assuming that there isn&#8217;t enough space to grow the vector in-place):</p>
+
+<p><img src="http://i.imgur.com/QYFGV.png" alt="image" /></p>
+
+<p>Just as the Python list did, the C++ vector allocated new storage, copied the elements over, and deleted the old storage.</p>
+
+<p>Unlike Python lists or Java arrays, however, C++ vectors do not support aliasing the contents of the vector (at least, not without some unsafe code). Instead, assignment of a value of type <code>std::vector</code> copies the contents of the vector. Consider this line:</p>
+
+<pre><code>std::vector b = a;
+</code></pre>
+
+<p>This code results in the following memory layout:</p>
+
+<p><img src="http://i.imgur.com/KIPIa.png" alt="image" /></p>
+
+<p>The entire contents of the vector were copied into a new allocation. This is, as you might expect, a quite expensive operation, and represents the downside of the C++ approach. However, the C++ approach comes with significant upsides as well: no garbage collection (via tracing GC or reference counting) is required, there is one less allocation to manage, and the vectors are allowed to grow just as Python lists are.</p>
+
+<p>This covers the three main vector representations in use by most languages. They&#8217;re fairly standard and representative; if I didn&#8217;t mention a language here, it&#8217;s likely that its implementation uses one of these three techniques. It&#8217;s important to note that none of these are right or wrong per se—they all have advantages and disadvantages. In a future post, I&#8217;ll explain the way Rust&#8217;s vector model allows the programmer to choose the model appropriate for the task at hand.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Typestate Is Dead, Long Live Typestate!]]></title>
