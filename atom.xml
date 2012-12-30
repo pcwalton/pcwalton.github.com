@@ -4,7 +4,7 @@
   <title><![CDATA[pcwalton]]></title>
   <link href="http://pcwalton.github.com/atom.xml" rel="self"/>
   <link href="http://pcwalton.github.com/"/>
-  <updated>2012-12-28T19:08:25-08:00</updated>
+  <updated>2012-12-30T10:54:09-08:00</updated>
   <id>http://pcwalton.github.com/</id>
   <author>
     <name><![CDATA[Patrick Walton]]></name>
@@ -12,6 +12,74 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[The Two Meanings of "impl"]]></title>
+    <link href="http://pcwalton.github.com/blog/2012/12/30/the-two-meanings-of-impl/"/>
+    <updated>2012-12-30T10:42:00-08:00</updated>
+    <id>http://pcwalton.github.com/blog/2012/12/30/the-two-meanings-of-impl</id>
+    <content type="html"><![CDATA[<p><code>impl</code> declarations in Rust have two forms. The subtle distinction between the two can be confusing at first, so I&#8217;ll briefly explain the difference here.</p>
+
+<p>The first form of <code>impl</code> is a <em>type implementation</em>. (Earlier I was calling this an &#8220;anonymous trait&#8221;, but I think that this terminology is probably more confusing than it&#8217;s worth.) This form allows you to define <em>new</em> functions associated with a type. For example:</p>
+
+<pre><code>struct Dog {
+    name: ~str
+}
+
+impl Dog {
+    static fn new(name: ~str) -&gt; Dog {
+        return Dog { name: name };
+    }
+
+    fn speak(&amp;self) {
+        io::println("woof");
+    }
+}
+</code></pre>
+
+<p>This example defines new functions <code>new</code> and <code>speak</code> under the <code>Dog</code> namespace. Here&#8217;s an example of their use:</p>
+
+<pre><code>let dog = Dog::new("Snoopy");
+Dog::speak(&amp;dog); // note: doesn't work today, see note below
+</code></pre>
+
+<p>(The explicit call of the form <code>Dog::speak(&amp;dog)</code> doesn&#8217;t work today, but I wrote it out to emphasize the fact that <code>speak</code> lives in the <code>Dog</code> namespace. It&#8217;s likely to work in the future, though. Today, you need to write <code>dog.speak()</code>.)</p>
+
+<p>The second form of <code>impl</code>, on the other hand, is a <em>trait implementation</em>. It&#8217;s distinguished from the first form by the presence of a <code>:</code> followed by the name of a trait. This form allows you to provide an implementation for one or more <em>existing</em> functions belonging to a trait. It doesn&#8217;t define any new functions. For instance, suppose I defined this trait:</p>
+
+<pre><code>trait Animal {
+    static fn species(&amp;self) -&gt; ~str;
+}
+</code></pre>
+
+<p>Then I can supply an implementation of <code>species()</code> for my <code>Dog</code> structure like this:</p>
+
+<pre><code>impl Dog : Animal {
+    static fn species(&amp;self) -&gt; ~str {
+        return ~"Canis lupus familiaris";
+    }
+}
+</code></pre>
+
+<p>The key point to notice here is that this form doesn&#8217;t define any new names. This code won&#8217;t compile:</p>
+
+<pre><code>let dog = Dog::new("Fido");
+io::println(Dog::species(&amp;dog)); // unresolved name: `species`
+</code></pre>
+
+<p>But this code will:</p>
+
+<pre><code>let dog = Dog::new("Spot");
+io::println(Animal::species(&amp;dog));
+</code></pre>
+
+<p>The reason is that a trait implementation only provides the implementation of one or more <em>existing</em> functions rather than defining new functions. The function <code>species</code> is part of the <code>Animal</code> trait; it&#8217;s not part of <code>Dog</code>.</p>
+
+<p>(You might reasonably ask: Why not duplicate the name <code>species</code> into <code>Dog</code>, for convenience? The reason is because of name collisions: it should be possible to implement <code>Animal</code> and later implement another trait with a different function called <code>species</code> without breaking existing code.)</p>
+
+<p>So the upshot of this is that there are two forms of implementations in Rust: the type implementation, which defines new functions, and the trait implementation, which attaches functionality to existing functions. Both use the <code>impl</code> keyword, but they&#8217;re different forms with different meanings.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[A Tour of Vector Representations]]></title>
