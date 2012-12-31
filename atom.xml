@@ -4,7 +4,7 @@
   <title><![CDATA[pcwalton]]></title>
   <link href="http://pcwalton.github.com/atom.xml" rel="self"/>
   <link href="http://pcwalton.github.com/"/>
-  <updated>2012-12-30T10:54:09-08:00</updated>
+  <updated>2012-12-31T09:04:37-08:00</updated>
   <id>http://pcwalton.github.com/</id>
   <author>
     <name><![CDATA[Patrick Walton]]></name>
@@ -88,7 +88,7 @@ io::println(Animal::species(&amp;dog));
     <id>http://pcwalton.github.com/blog/2012/12/28/a-tour-of-vectors</id>
     <content type="html"><![CDATA[<p>One aspect of Rust that&#8217;s often confusing to newcomers is its treatment of strings and vectors (also known as arrays or lists). As a result of its focus on systems programming, Rust has a somewhat lower-level concept of a vector than most other languages do. As part of an overall goal to make Rust easy to understand, I thought I&#8217;d write up a quick tour of the way other languages&#8217; vectors work from the perspective of the machine in order to make it easier to map these concepts into Rust.</p>
 
-<p>There are three common models that I&#8217;ve observed in use—for lack of better terminology, I&#8217;ll call them the Java model, the Python model, and the C++ model. (For brevity, I&#8217;ve omitted fixed-size, stack-allocated arrays, since these are very limited.) Most languages build upon one of these three. In a subsequent blog post, I&#8217;ll explain how Rust&#8217;s system differs from these and how the programmer can build the equivalents of each of these models in Rust.</p>
+<p>There are three common models that I&#8217;ve observed in use—for lack of better terminology, I&#8217;ll call them the Java model, the Python model, and the C++ STL model. (For brevity, I&#8217;ve omitted fixed-size, stack-allocated arrays, since these are very limited.) Most languages build upon one of these three. In a subsequent blog post, I&#8217;ll explain how Rust&#8217;s system differs from these and how the programmer can build the equivalents of each of these models in Rust.</p>
 
 <p>We&#8217;ll start with the Java model. Java&#8217;s basic array type has a fixed size when created and cannot be changed afterward. Arrays in Java are always allocated on the Java heap. For example, consider the following line of code:</p>
 
@@ -147,7 +147,7 @@ io::println(Animal::species(&amp;dog));
 
 <p>In summary, Python&#8217;s model sacrifices some efficiency at runtime because it requires both garbage collection and two allocations, but it gains flexibility by permitting both aliasing and append operations.</p>
 
-<p>Turning our attention to C++, we find that it has a different model from both Python and Java: it sacrifices aliasing but retains the ability for vectors to grow. For instance, after this C++ code executes:</p>
+<p>Turning our attention to the C++ STL, we find that it has a different model from both Python and Java: it sacrifices aliasing but retains the ability for vectors to grow. For instance, after this C++ STL code executes:</p>
 
 <pre><code>std::vector a;
 a.push_back(1);
@@ -163,7 +163,7 @@ a.push_back(5);
 
 <p>As before, the red box indicates the value of type <code>std::vector</code>. It is stored directly on the stack. It is still fundamentally a reference type, just as vectors in Python and Java are; note that the underlying storage does not have the type <code>std::vector&lt;int&gt;</code> but instead has the type <code>int[]</code> (a plain old C array).</p>
 
-<p>Like Python vectors, C++ vectors can grow. After executing this line:</p>
+<p>Like Python vectors, STL vectors can grow. After executing this line:</p>
 
 <pre><code>a.push_back(6);
 </code></pre>
@@ -172,9 +172,9 @@ a.push_back(5);
 
 <p><img src="http://i.imgur.com/QYFGV.png" alt="image" /></p>
 
-<p>Just as the Python list did, the C++ vector allocated new storage, copied the elements over, and deleted the old storage.</p>
+<p>Just as the Python list did, the STL vector allocated new storage, copied the elements over, and deleted the old storage.</p>
 
-<p>Unlike Python lists or Java arrays, however, C++ vectors do not support aliasing the contents of the vector (at least, not without some unsafe code). Instead, assignment of a value of type <code>std::vector</code> copies the contents of the vector. Consider this line:</p>
+<p>Unlike Java arrays, however, STL vectors do not support aliasing the contents of the vector (at least, not without some unsafe code). Instead, assignment of a value of type <code>std::vector</code> copies the contents of the vector. Consider this line:</p>
 
 <pre><code>std::vector b = a;
 </code></pre>
@@ -183,7 +183,7 @@ a.push_back(5);
 
 <p><img src="http://i.imgur.com/KIPIa.png" alt="image" /></p>
 
-<p>The entire contents of the vector were copied into a new allocation. This is, as you might expect, a quite expensive operation, and represents the downside of the C++ approach. However, the C++ approach comes with significant upsides as well: no garbage collection (via tracing GC or reference counting) is required, there is one less allocation to manage, and the vectors are allowed to grow just as Python lists are.</p>
+<p>The entire contents of the vector were copied into a new allocation. This is, as you might expect, a quite expensive operation, and represents the downside of the C++ STL approach. However, the STL approach comes with significant upsides as well: no garbage collection (via tracing GC or reference counting) is required, there is one less allocation to manage, and the vectors are allowed to grow just as Python lists are.</p>
 
 <p>This covers the three main vector representations in use by most languages. They&#8217;re fairly standard and representative; if I didn&#8217;t mention a language here, it&#8217;s likely that its implementation uses one of these three techniques. It&#8217;s important to note that none of these are right or wrong per se—they all have advantages and disadvantages. In a future post, I&#8217;ll explain the way Rust&#8217;s vector model allows the programmer to choose the model appropriate for the task at hand.</p>
 ]]></content>
