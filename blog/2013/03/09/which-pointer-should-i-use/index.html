@@ -1,0 +1,342 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Which Pointer Should I Use? - pcwalton</title>
+  <meta name="author" content="Patrick Walton">
+
+  
+  <meta name="description" content="Deciding whether to use a managed @ pointer or an owned ~ pointer to allocate memory is one of the most frequent sources of confusion for newcomers &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://pcwalton.github.com/blog/2013/03/09/which-pointer-should-i-use">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <link href="/atom.xml" rel="alternate" title="pcwalton" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">pcwalton</a></h1>
+  
+    <h2>Occasional notes on Rust, Firefox, etc.</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:pcwalton.github.com" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Which Pointer Should I Use?</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2013-03-09T12:05:00-08:00" pubdate data-updated="true">Mar 9<span>th</span>, 2013</time>
+        
+         | <a href="#disqus_thread">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>Deciding whether to use a managed <code>@</code> pointer or an owned <code>~</code> pointer to allocate memory is one of the most frequent sources of confusion for newcomers to Rust. There are two main angles to consider when deciding whether to use an <code>@</code> pointer or a <code>~</code> pointer in Rust: <em>memory management</em> and <em>concurrency</em>. I&#8217;ll cover each in turn.</p>
+
+<p>Note that this tutorial only presents the basic system. There are many extensions to the system—borrowing, library smart pointers, cells, and so on—that allow the various limitations described here to be overcome. But this is the core system that needs to be understood first.</p>
+
+<h1>Memory management</h1>
+
+<p>One of the most important features of Rust from a systems programming perspective is that garbage collection is optional. What this means is that there are safe ways to allocate memory that do not require bookkeeping at runtime to determine when it is safe to free that memory.</p>
+
+<p>What makes it possible for Rust programs to avoid runtime garbage collection is the notion of <em>ownership</em> of a particular allocation. Under this scheme, when the single owner of an allocation goes out of scope, the allocation is freed. Owned pointers in Rust are notated with <code>~</code>. Here&#8217;s an example of their use:</p>
+
+<pre><code>struct Point {
+    x: int,
+    y: int,
+}
+
+fn f() {
+    let x: ~Point = ~Point { x: 10, y: 20 };  // allocate a Point on the heap
+}  // &lt;-- x is freed here
+</code></pre>
+
+<p>Here, <code>x</code> is the single owner of the <code>Point</code> on the heap. Because there is only a single owner, Rust can throw away the memory pointed to by <code>x</code> at the end of the function.</p>
+
+<p>The compiler enforces that there is only a single owner. Assigning the pointer to a new location <em>transfers ownership</em> (known as a <em>move</em> for short). Consider this program:</p>
+
+<pre><code>fn g() {
+    let a: ~Point = ~Point { x: 10, y: 20 }; // allocate a Point on the heap
+    let b = a;                               // now b is the owner
+    println(b.x.to_str());                   // OK
+    println(a.x.to_str());                   // ERROR: use of moved value
+} // &lt;-- b is freed here
+</code></pre>
+
+<p>When compiling this program, the compiler produces the error &#8220;use of moved value&#8221;. This is because assigning an owned pointer transfers ownership, making the old variable <em>dead</em>. Because the compiler knows precisely which variables are dead at all times, it can avoid having to determine at runtime whether to free the memory that a variable points to, and it can prevent you from accidentally accessing dead variables. However, this comes at a price: you are limited to using a single variable to refer to an <code>~</code> allocation.</p>
+
+<p>By contrast, <code>@</code> pointers do not have this limitation. We think of memory that is allocated with <code>@</code> as <em>owned by the garbage collector</em>. You can make as many pointers to <code>@</code> memory as you would like. There is a cost in runtime performance, but this cost comes with a great deal of flexibility. For example, the code above will compile with an <code>@</code> pointer:</p>
+
+<pre><code>fn h() {
+    let a: @Point = @Point { x: 10, y: 20 }; // allocate a Point on the heap
+    let b = a;                               // a and b share a reference
+    println(b.x.to_str());                   // OK
+    println(a.x.to_str());                   // also OK
+}
+</code></pre>
+
+<p>So, in short: <em><code>@</code> pointers require garbage collection, but allow multiple pointers to the same location. <code>~</code> pointers avoid this GC overhead, but they don&#8217;t allow multiple pointers to the same location.</em></p>
+
+<h1>Concurrency</h1>
+
+<p>Another equally important aspect to the distinction between <code>@</code> and <code>~</code> is that it ensures that concurrent Rust tasks don&#8217;t race on shared memory. To illustrate this, here&#8217;s an example of broken code that doesn&#8217;t compile:</p>
+
+<pre><code>struct Counter {
+    count: int
+}
+
+fn f() {
+    // Allocate a mutable counter.
+    let counter: @mut Counter = @mut Counter { count: 0 };
+    do spawn {               // spawn a new thread
+        // Increment the counter.
+        counter.count += 1;  // ERROR: attempt to capture an `@` value
+    }
+    println(counter.count.to_str()); // print the value
+}
+</code></pre>
+
+<p>This code contains a classic <em>race</em>—if this code compiled, then the value printed would be either 0 or 1, depending on whether the <code>counter.count += 1</code> line executed first or the <code>println</code> executed first. The key here is that two threads—the spawned thread and the main thread—are both simultaneously attempting to access the <code>counter</code> object. To prevent these errors, Rust prevents multiple threads from accessing the same memory at the same time.</p>
+
+<p>Recall from the previous section that there can be any number of pointers to memory allocated with <code>@</code>. But there can be only one pointer to memory allocated with <code>~</code>. This suggests a way to forbid multiple threads from accessing the same data: <em>restrict the types of pointers that can be sent between threads to <code>~</code> pointers</em>. And this is exactly what Rust does.</p>
+
+<p>For any piece of <code>~</code>-allocated memory, there is only one pointer to it, and that pointer is owned by exactly one thread. So there can be no races, since any other threads simply don&#8217;t have access to that memory. Let&#8217;s rewrite our example above using <code>~</code> to illustrate this:</p>
+
+<pre><code>fn g() {
+    // Allocate a mutable counter.
+    let mut counter: ~Counter = ~Counter { count: 0 };
+    do spawn {               // spawn a new thread
+        counter.count += 1;  // increment the counter
+    }
+    println(counter.count.to_str()); // ERROR: use of moved value
+}
+</code></pre>
+
+<p>What&#8217;s going on here is that, by referring to <code>counter</code> inside the <code>spawn</code> block, the new thread <em>takes ownership</em> of the <code>counter</code> variable, and the <code>counter</code> variable becomes dead everywhere outside that block. Essentially, the main thread loses access to <code>counter</code> by <em>giving it away</em> to the thread it spawns. So the attempt to print the value on the screen from the main thread will fail. By contrast, this code will work:</p>
+
+<pre><code>fn h() {
+    // Allocate a mutable counter.
+    let mut counter: ~Counter = ~Counter { count: 0 };
+    do spawn {               // spawn a new thread
+        counter.count += 1;  // increment the counter
+        println(counter.count.to_str()); // OK: `counter` is owned by this thread
+    }
+}
+</code></pre>
+
+<p>Notice that the data race is gone: this code always prints <code>1</code>, because the printing happens in the thread that owns the <code>Counter</code> object.</p>
+
+<p>The resulting rule is pretty simple. In short: <em><code>@</code> pointers may not be sent from thread to thread. <code>~</code> pointers may be sent, and are owned by exactly one thread at a time.</em> Therefore, if you need data to be sent, do not allocate it with <code>@</code>.</p>
+
+<h1>Conclusion (TL;DR)</h1>
+
+<p>So the distinction between <code>@</code> and <code>~</code> is often confusing to newcomers, but it&#8217;s really quite simple. There are two main rules to remember:</p>
+
+<ol>
+<li><p><code>~</code> only supports one pointer to each allocation, so if you need multiple pointers to the same data, use <code>@</code>. But <code>@</code> requires garbage collection overhead, so if this is important to your application, use <code>~</code> wherever possible.</p></li>
+<li><p>Don&#8217;t use <code>@</code> pointers if you need to send data between multiple threads. Use <code>~</code> instead.</p></li>
+</ol>
+
+
+<p>Finally, I should note again that, if these rules are too restrictive for you (for example, if you need multiple pointers but can&#8217;t tolerate garbage collection pauses), there are more advanced solutions: borrowing, safe smart pointers, and unsafe code. But this simple system works well for most programs.</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Patrick Walton</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2013-03-09T12:05:00-08:00" pubdate data-updated="true">Mar 9<span>th</span>, 2013</time>
+      
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://pcwalton.github.com/blog/2013/03/09/which-pointer-should-i-use/" data-via="" data-counturl="http://pcwalton.github.com/blog/2013/03/09/which-pointer-should-i-use/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2013/01/21/the-new-borrow-check-in-a-nutshell/" title="Previous Post: The New Borrow Check in a Nutshell">&laquo; The New Borrow Check in a Nutshell</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2013/03/09/which-pointer-should-i-use/">Which Pointer Should I Use?</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/01/21/the-new-borrow-check-in-a-nutshell/">The New Borrow Check in a Nutshell</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/12/30/the-two-meanings-of-impl/">The Two Meanings of "impl"</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/12/28/a-tour-of-vectors/">A Tour of Vector Representations</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/12/26/typestate-is-dead/">Typestate Is Dead, Long Live Typestate!</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2013 - Patrick Walton -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'pcwalton';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://pcwalton.github.com/blog/2013/03/09/which-pointer-should-i-use/';
+        var disqus_url = 'http://pcwalton.github.com/blog/2013/03/09/which-pointer-should-i-use/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>
