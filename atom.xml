@@ -4,7 +4,7 @@
   <title><![CDATA[pcwalton]]></title>
   <link href="http://pcwalton.github.com/atom.xml" rel="self"/>
   <link href="http://pcwalton.github.com/"/>
-  <updated>2013-03-09T12:11:09-08:00</updated>
+  <updated>2013-03-09T12:15:08-08:00</updated>
   <id>http://pcwalton.github.com/</id>
   <author>
     <name><![CDATA[Patrick Walton]]></name>
@@ -125,7 +125,7 @@ fn f() {
 </ol>
 
 
-<p>Finally, I should note again that, if these rules are too restrictive for you (for example, if you need multiple pointers but can&#8217;t tolerate garbage collection pauses), there are more advanced solutions: borrowing, safe smart pointers, and unsafe code. But this simple system works well for most programs.</p>
+<p>Finally, I should note again that, if these rules are too restrictive for you (for example, if you need multiple pointers but can&#8217;t tolerate garbage collection pauses), there are more advanced solutions: borrowing, safe smart pointers, and unsafe code. But this simple system works well for many programs and forms the foundation of Rust&#8217;s approach to memory management.</p>
 ]]></content>
   </entry>
   
