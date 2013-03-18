@@ -1,0 +1,368 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>An Overview of Memory Management in Rust - pcwalton</title>
+  <meta name="author" content="Patrick Walton">
+
+  
+  <meta name="description" content="One of the key features of Rust that sets it apart from other new languages is that its memory management is manual—the programmer has explicit &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://pcwalton.github.com/blog/2013/03/18/an-overview-of-memory-management-in-rust">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <link href="/atom.xml" rel="alternate" title="pcwalton" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">pcwalton</a></h1>
+  
+    <h2>Occasional notes on Rust, Firefox, etc.</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:pcwalton.github.com" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">An Overview of Memory Management in Rust</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2013-03-18T15:07:00-07:00" pubdate data-updated="true">Mar 18<span>th</span>, 2013</time>
+        
+         | <a href="#disqus_thread">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>One of the key features of Rust that sets it apart from other new languages is that its memory management is <em>manual</em>—the programmer has explicit control over where and how memory is allocated and deallocated. In this regard, Rust is much more like C++ than like Java, Python, or Go, to name a few. This is an important design decision that makes Rust able to function in performance-critical domains that safe languages previously haven&#8217;t been able to—top-of-the line games and Web browsers, for example—but it adds a nontrivial learning curve to the language.</p>
+
+<p>For programmers familiar with modern C++, this learning curve is much shallower, but for those who are used to other languages, Rust&#8217;s smart pointers can seem confusing and complex. In keeping with the systems-oriented nature of Rust, this post is designed to explain how Rust&#8217;s memory management works and how to effectively use it.</p>
+
+<h2>Smart pointers</h2>
+
+<p>In many languages with manual memory management, like C, you directly allocate and free memory with calls to special functions. For example:</p>
+
+<pre><code>void f() {
+    int *x = malloc(sizeof(int));  /* allocates space for an int on the heap */
+    *x = 1024;                     /* initialize the value */
+    printf("%d\n", *x);            /* print it on the screen */
+    free(x);                       /* free the memory, returning it to the heap */
+}
+</code></pre>
+
+<p>C gives you a great deal of control over where memory is allocated and deallocated. Memory is allocated with a special function <code>malloc</code>, and it is freed with a special function <code>free</code>. After the call to <code>free</code>, it is an error to attempt to use <code>x</code>, as it is a <em>dangling pointer</em>. A dangling pointer points to invalid memory, but the C compiler makes no attempt to prevent you from using it; it&#8217;s your responsibility to avoid touching it after freeing the memory it points to.</p>
+
+<p>Rust gives you the same level of control over memory, but it works somewhat differently. Let&#8217;s see how the same piece of code looks in Rust:</p>
+
+<pre><code>fn f() {
+    let x: ~int = ~1024;          // allocate space and initialize an int
+                                  // on the heap
+    println(fmt!("%d", *x));      // print it on the screen
+} // &lt;-- the memory that x pointed at is automatically freed here
+</code></pre>
+
+<p>There are three main differences to notice here:</p>
+
+<ol>
+<li><p>In C, you allocate memory first (with the call to <code>malloc</code>), and then you initialize it (in the example above, with the <code>*x = 1024</code> assignment). Rust fuses the two operations together into the <code>~</code> allocation operator, so that you don&#8217;t accidentally forget to initialize memory before you use it.</p></li>
+<li><p>In C, the call to <code>malloc</code> returns a plain pointer, <code>int *</code>. In Rust, the <code>~</code> operator, which allocates memory, returns a special <em>smart pointer</em> to an int. Because this type of smart pointer is so common, its name is just a single character, <code>~</code>—thus the type of this smart pointer is written as <code>~int</code>.</p></li>
+<li><p>You don&#8217;t call <code>free</code> manually in Rust. Rather, the compiler automatically frees the memory for you when a smart pointer goes out of scope.</p></li>
+</ol>
+
+
+<p>As it turns out, points (2) and (3) are very intertwined, and together they form the cornerstone of Rust&#8217;s memory management system. Here&#8217;s the idea: Unlike C, allocation functions in Rust don&#8217;t return a raw pointer to the space they allocate. Instead, they return a <em>smart pointer</em> to the space. A smart pointer is a special kind of value that controls when the object is freed. Like a raw pointer in C, you can access the data that a smart pointer refers to with <code>*</code>. But unlike a raw pointer, <em>when the smart pointer to an allocation goes out of scope, that allocation is automatically freed.</em> In this way, smart pointers are &#8220;smart&#8221; because they not only track where an object is but also track how to clean it up.</p>
+
+<p>Unlike C, in Rust you never call <code>free</code> directly. Instead, you rely on smart pointers to free all allocations. The most basic reason for this is that smart pointers make it harder to forget to free memory. In C, if you forget to call <code>free</code>, you have a <em>memory leak</em>, which means that the memory will not be cleaned up until the program exits. However, in Rust, the compiler will automatically insert the code necessary to free the memory for you when the smart pointer pointing to your data goes out of scope.</p>
+
+<p>Rust has multiple types of smart pointers, corresponding to the different strategies that programs use to reclaim memory. Some smart pointers, namely <code>~</code> and <code>@</code> (which we will cover shortly), have special names known to the compiler, because they&#8217;re so common. (Having to type long names like <code>unique_ptr</code> all the time would be a burden.) Other smart pointers, such as <code>ARC</code> (which allows you to share read-only data between threads), are in the standard library and are not built into the compiler.</p>
+
+<p>The pointer covered above is known as the <em>unique smart pointer</em> <code>~</code>. We call it &#8220;unique&#8221; because there is always only one smart pointer pointing to each allocation. The other type of smart pointer built into the language is the <em>managed smart pointer</em>, which allows <em>multiple</em> smart pointers to point to the same allocation and uses <em>garbage collection</em> to determine when to free it. Here&#8217;s an example of a managed smart pointer in use:</p>
+
+<pre><code>fn foo() {
+    let x: @int = @1024;     // allocate space and initialize an int
+                             // on the heap
+    bar(x);                  // pass it to `bar`
+    println(fmt!("%d", x));  // print it on the screen
+} // &lt;-- the memory can be freed here
+
+fn bar(x: @int) {
+    let y: @int = x;         // make a new smart pointer to `x`
+} // &lt;-- despite `y` going out of scope, the memory is *not* freed here
+</code></pre>
+
+<p>The key difference between <code>~</code> and <code>@</code> is that <code>@</code> allows <em>multiple</em> smart pointers to point to the same data, and the data is cleaned up only after the <em>last</em> such smart pointer disappears. Notice that, in this example, the memory pointed at by <code>y</code> (which is the same as the memory pointed at by <code>x</code>) is not freed at the end of the function <code>bar</code>, because <code>x</code> is still in use and also points to the same data. The fact that <code>@</code> allows multiple smart pointers to the same data, as well as the fact that the allocation is freed only when all of those pointers go out of scope, make managed smart pointers very useful. However, they can be less efficient than unique smart pointers, as they require garbage collection at runtime.</p>
+
+<h2>References</h2>
+
+<p>Recall that a smart pointer is a pointer that automatically frees the memory that it points to when it goes out of scope. Perhaps surprisingly, it often turns out that it&#8217;s useful to have a kind of pointer that <em>doesn&#8217;t</em> free the memory that it points to. Consider this code:</p>
+
+<pre><code>struct Dog {
+    name: ~str    // a unique smart pointer to a string
+}
+
+fn dogshow() {
+    let dogs: [~Dog * 3] = [        // create an array of Dog objects
+        ~Dog { name: ~"Spot"   },   // use unique smart pointers to
+                                    // allocate
+        ~Dog { name: ~"Fido"   },
+        ~Dog { name: ~"Snoopy" },
+    ];
+    for dogs.each |dog| {
+        println(fmt!("Say hello to %s", dog.name));
+    }
+} // &lt;-- all dogs destroyed here
+</code></pre>
+
+<p>Suppose that we wanted to single Fido out as the winner of the dog show. We might try this code:</p>
+
+<pre><code>fn dogshow() {
+    let dogs: [~Dog * 3] = [
+        ~Dog { name: ~"Spot"   },
+        ~Dog { name: ~"Fido"   },
+        ~Dog { name: ~"Snoopy" },
+    ];
+    let winner: ~Dog = dogs[1];
+    for dogs.each |dog| {
+        println(fmt!("Say hello to %s", dog.name));
+    }
+    println(fmt!("And the winner is: %s!", winner.name));
+} // &lt;-- all dogs, and `winner`, destroyed here
+</code></pre>
+
+<p>But this code won&#8217;t compile. The reason is that, if it did, Fido would be destroyed twice. Remember that <em>unique smart pointers free the allocations they point to when they go out of scope</em>. The code attempts to make a second smart pointer to Fido at the time it executes the line <code>let winner: ~Dog = dogs[1];</code> If the compiler allowed this to proceed, then at the end of the block, the program would attempt to free Fido twice—once when it frees the original smart pointer embedded within the <code>dogs</code> array, and once when it frees <code>winner</code>.</p>
+
+<p>What we really want is for <code>winner</code> to be a pointer that <em>doesn&#8217;t</em> free the allocation that it points to. In fact, what we want isn&#8217;t a smart pointer at all; we want a <em>reference</em>. Here&#8217;s the code rewritten to use one:</p>
+
+<pre><code>fn dogshow() {
+    let dogs: [~Dog * 3] = [
+        ~Dog { name: ~"Spot"   },
+        ~Dog { name: ~"Fido"   },
+        ~Dog { name: ~"Snoopy" },
+    ];
+    let winner: &amp;Dog = dogs[1];  // note use of `&amp;` to form a reference
+    for dogs.each |dog| {
+        println(fmt!("Say hello to %s", dog.name));
+    }
+    println(fmt!("And the winner is: %s!", winner.name));
+} // &lt;-- all dogs destroyed here
+</code></pre>
+
+<p>This code will now compile. Here, we convert <code>winner</code> into a reference, notated in Rust with <code>&amp;</code>. You can take a reference to any smart pointer type in Rust by simply assigning it to a value with a reference type, as the <code>let winner: &amp;Dog = dogs[1]</code> line does.</p>
+
+<p>References (also known as <em>borrowed pointers</em>) don&#8217;t cause the compiler to free the data they refer to. However, they don&#8217;t <em>prevent</em> the compiler from freeing anything either. They have no effect on what smart pointers will do; regardless of how many references you have, a unique smart pointer will always free the data that it points to when it goes out of scope, and a managed smart pointer will always free its data when all managed smart pointers to the same allocation go out of scope.</p>
+
+<p>This means that you have to be careful with code like this:</p>
+
+<pre><code>fn foo() {
+    let y: &amp;int;
+    {
+        let x: ~int = ~2048;
+        y = x;
+    } // &lt;-- x freed here
+    println(fmt!("Your lucky number is: %d", *y)); // CRASH: accesses freed data!
+}
+</code></pre>
+
+<p>In languages like C++, code like this could cause faults from attempting to access invalid memory. As it turns out, however, the Rust compiler can actually prevent you from writing code like this at compile time. Essentially, the Rust compiler <em>tracks where each reference came from</em> and reports an error if a reference persists longer than the allocation it points into. This means that, generally speaking, you can use references all you like and have the confidence that they won&#8217;t result in hard-to-diagnose errors at runtime.</p>
+
+<h2>Conclusion</h2>
+
+<p>These ideas—smart pointers and references—form the basis of memory management in Rust. If you&#8217;re a C++ programmer, most of this will (hopefully!) simply have been an exercise in learning different syntax. For other programmers, these concepts are likely more foreign. But using these tools, you can write code with fine-grained control over memory, with improved safety over languages like C.</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Patrick Walton</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2013-03-18T15:07:00-07:00" pubdate data-updated="true">Mar 18<span>th</span>, 2013</time>
+      
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://pcwalton.github.com/blog/2013/03/18/an-overview-of-memory-management-in-rust/" data-via="" data-counturl="http://pcwalton.github.com/blog/2013/03/18/an-overview-of-memory-management-in-rust/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2013/03/09/which-pointer-should-i-use/" title="Previous Post: Which Pointer Should I Use?">&laquo; Which Pointer Should I Use?</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2013/03/18/an-overview-of-memory-management-in-rust/">An Overview of Memory Management in Rust</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/03/09/which-pointer-should-i-use/">Which Pointer Should I Use?</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/01/21/the-new-borrow-check-in-a-nutshell/">The New Borrow Check in a Nutshell</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/12/30/the-two-meanings-of-impl/">The Two Meanings of "impl"</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/12/28/a-tour-of-vectors/">A Tour of Vector Representations</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2013 - Patrick Walton -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'pcwalton';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://pcwalton.github.com/blog/2013/03/18/an-overview-of-memory-management-in-rust/';
+        var disqus_url = 'http://pcwalton.github.com/blog/2013/03/18/an-overview-of-memory-management-in-rust/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

@@ -5,7 +5,7 @@
 <!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
 <head>
   <meta charset="utf-8">
-  <title>Why Lifetimes? - pcwalton</title>
+  <title>pcwalton</title>
   <meta name="author" content="Patrick Walton">
 
   
@@ -18,7 +18,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   
-  <link rel="canonical" href="http://pcwalton.github.com/blog/2012/04/23/why-lifetimes">
+  <link rel="canonical" href="http://pcwalton.github.com/blog/page/2">
   <link href="/favicon.png" rel="icon">
   <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
   <script src="/javascripts/modernizr-2.0.js"></script>
@@ -62,12 +62,15 @@
 </nav>
   <div id="main">
     <div id="content">
-      <div>
-<article class="hentry" role="article">
+      <div class="blog-index">
   
+  
+  
+    <article>
+      
   <header>
     
-      <h1 class="entry-title">Why Lifetimes?</h1>
+      <h1 class="entry-title"><a href="/blog/2012/04/23/why-lifetimes/">Why Lifetimes?</a></h1>
     
     
       <p class="meta">
@@ -85,14 +88,14 @@
 
 <time datetime="2012-04-23T23:19:00-07:00" pubdate data-updated="true">Apr 23<span>rd</span>, 2012</time>
         
-         | <a href="#disqus_thread">Comments</a>
+         | <a href="/blog/2012/04/23/why-lifetimes/#disqus_thread">Comments</a>
         
       </p>
     
   </header>
 
 
-<div class="entry-content"><p>One of the most unique new features of Rust is its slowly-growing support for <em>regions</em>&mdash;or <em>lifetimes</em>, as some of us core developers like to call them. As lifetimes aren&#8217;t found in any mainstream languages, I thought I&#8217;d expand upon why we want them and how they can be used to improve memory management for performance (especially interactive performance) without sacrificing safety. In this first post I&#8217;ll explain why existing memory models weren&#8217;t enough and why we went searching for alternatives. Here I&#8217;m assuming basic knowledge of garbage collection, reference counting, and <code>malloc</code>/<code>free</code>, but nothing more.</p>
+  <div class="entry-content"><p>One of the most unique new features of Rust is its slowly-growing support for <em>regions</em>&mdash;or <em>lifetimes</em>, as some of us core developers like to call them. As lifetimes aren&#8217;t found in any mainstream languages, I thought I&#8217;d expand upon why we want them and how they can be used to improve memory management for performance (especially interactive performance) without sacrificing safety. In this first post I&#8217;ll explain why existing memory models weren&#8217;t enough and why we went searching for alternatives. Here I&#8217;m assuming basic knowledge of garbage collection, reference counting, and <code>malloc</code>/<code>free</code>, but nothing more.</p>
 
 <p>The programming models that the current crop of mainstream programming languages expose can be divided pretty evenly into two camps: <em>explicitly-managed</em> environments and <em>garbage-collected</em> enivornments. By far, the most common programming languages built around explicitly-managed environments are C, C++, and Objective-C, and explicit memory management is so associated with these languages that it&#8217;s often just called &#8220;the C memory model&#8221;. Almost all other languages in mainstream use are garbage collected&mdash;Java, C#, JavaScript, Python, Ruby, Lisp, Perl, and tons of other languages all fall into this camp. (Note that here I&#8217;m using &#8220;garbage collection&#8221; in the general sense to mean automatic memory management; some of these languages don&#8217;t have <em>tracing</em> garbage collection and instead use reference counting.)</p>
 
@@ -114,59 +117,20 @@
 
 <p>Fortunately, the research landscape offers some promising potential solutions, which I&#8217;ll cover next time.</p>
 </div>
-
-
-  <footer>
-    <p class="meta">
-      
   
-
-<span class="byline author vcard">Posted by <span class="fn">Patrick Walton</span></span>
-
-      
-
-
-
-
-
-
-
-
   
 
 
-<time datetime="2012-04-23T23:19:00-07:00" pubdate data-updated="true">Apr 23<span>rd</span>, 2012</time>
-      
-
-
-    </p>
+    </article>
+  
+  <div class="pagination">
     
-      <div class="sharing">
-  
-  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://pcwalton.github.com/blog/2012/04/23/why-lifetimes/" data-via="" data-counturl="http://pcwalton.github.com/blog/2012/04/23/why-lifetimes/" >Tweet</a>
-  
-  
-  
-</div>
-
+    <a href="/blog/archives">Blog Archives</a>
     
-    <p class="meta">
-      
-      
-        <a class="basic-alignment right" href="/blog/2012/05/28/coherence/" title="Next Post: Coherence, modularity, and extensibility for typeclasses">Coherence, modularity, and extensibility for typeclasses &raquo;</a>
-      
-    </p>
-  </footer>
-</article>
-
-  <section>
-    <h1>Comments</h1>
-    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a class="next" href="/">Newer &rarr;</a>
+    
+  </div>
 </div>
-  </section>
-
-</div>
-
 <aside class="sidebar">
   
     <section>
@@ -186,7 +150,7 @@
       </li>
     
       <li class="post">
-        <a href="/blog/2012/12/30/the-two-meanings-of-impl/">The Two Meanings of "impl"</a>
+        <a href="/blog/2012/12/30/the-two-meanings-of-impl/">The Two Meanings of &#8220;impl&#8221;</a>
       </li>
     
       <li class="post">
@@ -204,7 +168,6 @@
   
 </aside>
 
-
     </div>
   </div>
   <footer role="contentinfo"><p>
@@ -219,10 +182,7 @@
       var disqus_shortname = 'pcwalton';
       
         
-        // var disqus_developer = 1;
-        var disqus_identifier = 'http://pcwalton.github.com/blog/2012/04/23/why-lifetimes/';
-        var disqus_url = 'http://pcwalton.github.com/blog/2012/04/23/why-lifetimes/';
-        var disqus_script = 'embed.js';
+        var disqus_script = 'count.js';
       
     (function () {
       var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
