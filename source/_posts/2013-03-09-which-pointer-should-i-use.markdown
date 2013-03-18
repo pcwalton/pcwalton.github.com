@@ -105,4 +105,4 @@ So the distinction between `@` and `~` is often confusing to newcomers, but it's
 
 2. Don't use `@` pointers if you need to send data between multiple threads. Use `~` instead.
 
-Finally, I should note again that, if these rules are too restrictive for you (for example, if you need multiple pointers but can't tolerate garbage collection pauses), there are more advanced solutions: borrowing, safe smart pointers, and unsafe code. But this simple system works well for most programs.
+Finally, I should note again that, if these rules are too restrictive for you (for example, if you need multiple pointers but can't tolerate garbage collection pauses), there are more advanced solutions: borrowing, safe smart pointers, and unsafe code. But this simple system works well for many programs and forms the foundation of Rust's approach to memory management.
