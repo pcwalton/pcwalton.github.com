@@ -209,7 +209,7 @@ fn dogshow() {
 
 <p>References (also known as <em>borrowed pointers</em>) don&#8217;t cause the compiler to free the data they refer to. However, they don&#8217;t <em>prevent</em> the compiler from freeing anything either. They have no effect on what smart pointers will do; regardless of how many references you have, a unique smart pointer will always free the data that it points to when it goes out of scope, and a managed smart pointer will always free its data when all managed smart pointers to the same allocation go out of scope.</p>
 
-<p>This means that you have to be careful with code like this:</p>
+<p>This is important to keep in mind. Code like this will not compile:</p>
 
 <pre><code>fn foo() {
     let y: &amp;int;
@@ -217,7 +217,7 @@ fn dogshow() {
         let x: ~int = ~2048;
         y = x;
     } // &lt;-- x freed here
-    println(fmt!("Your lucky number is: %d", *y)); // CRASH: accesses freed data!
+    println(fmt!("Your lucky number is: %d", *y)); // ERROR: accesses freed data!
 }
 </code></pre>
 
