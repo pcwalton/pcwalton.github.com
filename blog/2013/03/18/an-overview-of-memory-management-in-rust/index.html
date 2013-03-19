@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
 <!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
@@ -140,7 +139,7 @@
     let x: @int = @1024;     // allocate space and initialize an int
                              // on the heap
     bar(x);                  // pass it to `bar`
-    println(fmt!("%d", x));  // print it on the screen
+    println(fmt!("%d", *x));  // print it on the screen
 } // &lt;-- the memory can be freed here
 
 fn bar(x: @int) {
