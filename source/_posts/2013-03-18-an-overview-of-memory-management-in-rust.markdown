@@ -37,11 +37,11 @@ There are three main differences to notice here:
 
 2. In C, the call to `malloc` returns a plain pointer, `int *`. In Rust, the `~` operator, which allocates memory, returns a special *smart pointer* to an int. Because this type of smart pointer is so common, its name is just a single character, `~`—thus the type of this smart pointer is written as `~int`.
 
-3. You don't call `free` manually in Rust. Rather, the compiler automatically calls `free` for you when a smart pointer goes out of scope.
+3. You don't call `free` manually in Rust. Rather, the compiler automatically frees the memory for you when a smart pointer goes out of scope.
 
 As it turns out, points (2) and (3) are very intertwined, and together they form the cornerstone of Rust's memory management system. Here's the idea: Unlike C, allocation functions in Rust don't return a raw pointer to the space they allocate. Instead, they return a *smart pointer* to the space. A smart pointer is a special kind of value that controls when the object is freed. Like a raw pointer in C, you can access the data that a smart pointer refers to with `*`. But unlike a raw pointer, *when the smart pointer to an allocation goes out of scope, that allocation is automatically freed.* In this way, smart pointers are "smart" because they not only track where an object is but also track how to clean it up.
 
-Unlike C, in Rust you never call `free` directly. Instead, you rely on smart pointers to free all allocations. The most basic reason for this is that smart pointers make it harder to forget to free memory. In C, if you forget to call `free`, you have a *memory leak*, which means that the memory will not be cleaned up until the program exits. However, in Rust, the compiler will automatically call `free` for you when the smart pointer pointing to your data goes out of scope.
+Unlike C, in Rust you never call `free` directly. Instead, you rely on smart pointers to free all allocations. The most basic reason for this is that smart pointers make it harder to forget to free memory. In C, if you forget to call `free`, you have a *memory leak*, which means that the memory will not be cleaned up until the program exits. However, in Rust, the compiler will automatically insert the code necessary to free the memory for you when the smart pointer pointing to your data goes out of scope.
 
 Rust has multiple types of smart pointers, corresponding to the different strategies that programs use to reclaim memory. Some smart pointers, namely `~` and `@` (which we will cover shortly), have special names known to the compiler, because they're so common. (Having to type long names like `unique_ptr` all the time would be a burden.) Other smart pointers, such as `ARC` (which allows you to share read-only data between threads), are in the standard library and are not built into the compiler.
 
@@ -116,7 +116,8 @@ This code will now compile. Here, we convert `winner` into a reference, notated 
 
 References (also known as *borrowed pointers*) don't cause the compiler to free the data they refer to. However, they don't *prevent* the compiler from freeing anything either. They have no effect on what smart pointers will do; regardless of how many references you have, a unique smart pointer will always free the data that it points to when it goes out of scope, and a managed smart pointer will always free its data when all managed smart pointers to the same allocation go out of scope.
 
-This means that you have to be careful with code like this:
+This is important to keep in mind. Code like this will not compile:
+
 
     fn foo() {
         let y: &int;
@@ -124,10 +125,10 @@ This means that you have to be careful with code like this:
             let x: ~int = ~2048;
             y = x;
         } // <-- x freed here
-        println(fmt!("Your lucky number is: %d", *y)); // CRASH: accesses freed data!
+        println(fmt!("Your lucky number is: %d", *y)); // ERROR: accesses freed data!
     }
 
-In languages like C++, code like this could cause faults from attempting to access invalid memory. As it turns out, however, the Rust compiler can actually prevent you from writing code like this at compile time. Essentially, the Rust compiler *tracks where each reference came from* and reports an error if a reference persists longer than the allocation it points into. This means that, generally speaking, you can use references all you like and have the confidence that they won't result in hard-to-diagnose errors at runtime.
+In languages like C++, code like this could cause faults from attempting to access invalid memory. As it turns out, however, this piece of code won't compile—the Rust compiler can and does prevent you from writing code like this at compile time. Essentially, the Rust compiler *tracks where each reference came from* and reports an error if a reference persists longer than the allocation it points into. This means that, generally speaking, you can use references all you like and have the confidence that they won't result in hard-to-diagnose errors at runtime.
 
 ## Conclusion
 
