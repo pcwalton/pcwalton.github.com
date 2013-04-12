@@ -76,7 +76,7 @@ What does this have to do with Rust? In fact, this error corresponds to a borrow
 
     impl Foo {
         fn get_first_index(&'a mut self) -> &'a mut int {
-            assert self.indices.len() > 0;
+            assert!(self.indices.len() > 0);
             return &mut indices[0];
         }
 

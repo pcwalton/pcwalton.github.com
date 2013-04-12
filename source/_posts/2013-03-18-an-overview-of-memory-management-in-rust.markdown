@@ -51,7 +51,7 @@ The pointer covered above is known as the *unique smart pointer* `~`. We call it
         let x: @int = @1024;     // allocate space and initialize an int
                                  // on the heap
         bar(x);                  // pass it to `bar`
-        println(fmt!("%d", x));  // print it on the screen
+        println(fmt!("%d", *x)); // print it on the screen
     } // <-- the memory can be freed here
 
     fn bar(x: @int) {
