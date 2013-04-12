@@ -4,7 +4,7 @@
   <title><![CDATA[pcwalton]]></title>
   <link href="http://pcwalton.github.com/atom.xml" rel="self"/>
   <link href="http://pcwalton.github.com/"/>
-  <updated>2013-03-18T15:42:59-07:00</updated>
+  <updated>2013-04-12T14:10:04-07:00</updated>
   <id>http://pcwalton.github.com/</id>
   <author>
     <name><![CDATA[Patrick Walton]]></name>
@@ -12,6 +12,108 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[A Hard Case for Memory Safety]]></title>
+    <link href="http://pcwalton.github.com/blog/2013/04/12/a-hard-case-for-memory-safety/"/>
+    <updated>2013-04-12T14:01:00-07:00</updated>
+    <id>http://pcwalton.github.com/blog/2013/04/12/a-hard-case-for-memory-safety</id>
+    <content type="html"><![CDATA[<p>Quick quiz: In this C++ program, is the definition of <code>munge</code> guaranteed to be memory safe? (Assume that the definition of <code>increment_counter</code> uses only modern C++ idioms and doesn&#8217;t do anything like dereference an invalid pointer.)</p>
+
+<pre><code>#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+class foo {
+public:
+    std::vector&lt;int&gt; indices;
+    int counter;
+
+    foo() : indices(), counter(0) {
+        indices.push_back(1);
+        indices.push_back(2);
+        indices.push_back(3);
+    }
+
+    void increment_counter();
+
+    int &amp;get_first_index() {
+        assert(indices.size() &gt; 0);
+        return indices[0];
+    }
+
+    void munge() {
+        int &amp;first = get_first_index();
+        increment_counter();
+        std::cout &lt;&lt; first &lt;&lt; std::endl;
+        first = 20;
+    }
+};
+
+int main() {
+    foo foo;
+    foo.munge();
+    return 0;
+}
+</code></pre>
+
+<p>The answer: Even with this caveat, we can&#8217;t tell! It depends on the definition of <code>increment_counter</code>.</p>
+
+<p>If <code>increment_counter</code> has this definition, the code is memory safe:</p>
+
+<pre><code>void foo::increment_counter() {
+    counter++;
+}
+</code></pre>
+
+<p>But if <code>increment_counter</code> has this definition, for example, then it isn&#8217;t:</p>
+
+<pre><code>void foo::increment_counter() {
+    indices.clear();
+    counter++;
+}
+</code></pre>
+
+<p>This definition would cause the <code>first</code> reference in <code>munge</code> to become a dangling reference, and the call to <code>std::cout</code> and subsequent assignment of <code>first</code> will have undefined behavior. If <code>first</code> were not an <code>int</code> but were instead an instance of a class, and <code>munge</code> attempted to perform a virtual method call on it, then this would constitute a critical security vulnerability.</p>
+
+<p>The point here is that determining memory safety in C++ requires <em>non-local</em> reasoning. Any analysis that tries to determine safety of C++ code, whether performed by a machine or performed by a human auditor, has to analyze many functions all at once, rather than one function at a time, to determine whether the code is memory safe. As this example illustrates, sticking to modern C++ coding styles, even with bounds checks, is not enough to prevent this.</p>
+
+<p>There are a few ways around this:</p>
+
+<ul>
+<li><p>For each function call, analyze the source to the called function to determine whether it&#8217;s memory safe <em>in the context of the caller</em>. This doesn&#8217;t always work, though: it&#8217;s hard or impossible when function pointers or virtual methods are involved (which function ends up being called?), and it&#8217;s hard with separately compiled code (what if the called function is in a DLL that you don&#8217;t have source for?)</p></li>
+<li><p>Change the type of <code>indices</code> to <code>std::vector&lt;std::shared_ptr&lt;int&gt;&gt;</code>; i.e. use reference counting to keep the pointer alive. This has a runtime cost.</p></li>
+<li><p>Inline the body of <code>increment_counter</code>, so that the memory safety of <code>munge</code> is immediately clear.</p></li>
+<li><p>Make <code>increment_counter</code> a class method (or just a function) instead of an instance method, and have it take <code>counter</code> by reference. The idea here is to prevent the possibility that <code>increment_counter</code> could mess with <code>indices</code> in any way by shutting off its access to it.</p></li>
+</ul>
+
+
+<p>What does this have to do with Rust? In fact, this error corresponds to a borrow check error that Brian Anderson hit when working on the scheduler. In Rust, the corresponding code looks something like this:</p>
+
+<pre><code>impl Foo {
+    fn get_first_index(&amp;'a mut self) -&gt; &amp;'a mut int {
+        assert self.indices.len() &gt; 0;
+        return &amp;mut indices[0];
+    }
+
+    fn munge(&amp;mut self) {
+        let first = self.get_first_index();
+        self.increment_counter(); // ERROR
+        println(first.to_str());
+        *first = 20;
+    }
+}
+</code></pre>
+
+<p>This causes a borrow check error because the <code>first</code> reference conflicts with the call to <code>increment_counter</code>. The reason the borrow check complains is that the borrow check only checks one function at a time, and it could tell (quite rightly!) that the call to <code>increment_counter</code> might be unsafe. The solution is to make <code>increment_counter</code> a static method that only has access to counter; i.e. to rewrite the <code>self.increment_counter()</code> line as follows:</p>
+
+<pre><code>Foo::increment_counter(&amp;mut self.counter);
+</code></pre>
+
+<p>Since the borrow check now sees that <code>increment_counter</code> couldn&#8217;t possibly destroy the <code>first</code> reference, it now accepts the code.</p>
+
+<p>Fortunately, such borrow check errors are not as common anymore, with the new simpler borrow check rules. But it&#8217;s interesting to see that, when they do come up, they&#8217;re warning about real problems that affect any language with manual memory management. In the C++ code above, most programmers probably wouldn&#8217;t notice the fact that the memory safety of <code>munge</code> depends on the definition of <code>increment_counter</code>. The challenge in Rust, then, will be to make the error messages comprehensible enough to allow programmers to understand what the borrow checker is warning about and how to fix any problems that arise.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[An Overview of Memory Management in Rust]]></title>
