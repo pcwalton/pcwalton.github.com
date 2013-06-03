@@ -16,11 +16,13 @@ It is perfectly legal per the rules of the benchmarks game to use unsafe code (o
 
 For all these reasons and more, it is important to not read too much into these benchmark results. It would be a mistake to conclude that "Rust is faster than C" because of the performance on the `k-nucleotide` benchmark. Likewise, it would be a mistake to conclude that "C is faster than Rust" because of the `fasta-redux` benchmark. The goal here is simply to demonstrate that *sequential Rust can be written in a way that approaches competitive parity with equivalent C code.*
 
+*Note that the benchmarks include `clang` because GCC 4.2 is a very old version. The purpose of this benchmark is not to benchmark C compilers, but rather to perform cross-implementation comparisons between two languages.*
+
 Enough disclaimers; on to the results:
 
-![Results](http://i.imgur.com/YxjT8wp.png)
+![Results](http://i.imgur.com/Cd3ZBHT.png)
 
-These programs were tested on a 2.53 GHz Intel Core 2 Duo MacBook Pro with 4 GB of RAM, running Mac OS X 10.6 Snow Leopard. "GCC 4.2" is GCC 4.2.1, Apple build 5666; "clang 1.7" is Apple clang 1.7, based on LLVM 2.9svn. Three runs were averaged together to produce each result. Results are normalized to GCC 4.2. Lower numbers are better.
+These programs were tested on a 2.53 GHz Intel Core 2 Duo MacBook Pro with 4 GB of RAM, running Mac OS X 10.6 Snow Leopard. "GCC 4.2" is GCC 4.2.1, Apple build 5666; "clang 1.7" is Apple clang 1.7, based on LLVM 2.9svn; "clang 3.1" is LLVM 3.1, trunk 149587. GCC and clang were run with `-O2`, and Rust was run with `-O` (which is like `-O2`). Three runs were averaged together to produce each result. Results are normalized to GCC 4.2. Lower numbers are better.
 
 As mentioned before, this is a selected set of benchmarks. The benchmarks that were not included are:
 
