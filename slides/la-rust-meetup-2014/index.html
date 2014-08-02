@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+
+	<head>
+		<meta charset="utf-8">
+
+		<title>reveal.js - The HTML Presentation Framework</title>
+
+		<meta name="description" content="A framework for easily creating beautiful presentations using HTML">
+		<meta name="author" content="Hakim El Hattab">
+
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+		<link rel="stylesheet" href="css/reveal.min.css">
+		<link rel="stylesheet" href="css/theme/solarized.css" id="theme">
+
+		<!-- For syntax highlighting -->
+		<link rel="stylesheet" href="lib/css/zenburn.css">
+
+		<!-- If the query includes 'print-pdf', include the PDF print sheet -->
+		<script>
+			if( window.location.search.match( /print-pdf/gi ) ) {
+				var link = document.createElement( 'link' );
+				link.rel = 'stylesheet';
+				link.type = 'text/css';
+				link.href = 'css/print/pdf.css';
+				document.getElementsByTagName( 'head' )[0].appendChild( link );
+			}
+		</script>
+
+		<!--[if lt IE 9]>
+		<script src="lib/js/html5shiv.js"></script>
+		<![endif]-->
+	</head>
+
+	<body>
+
+		<div class="reveal">
+
+			<!-- Any section element inside of this container is displayed as a slide -->
+			<div class="slides">
+				<section>
+					<h1>Introducing Rust</h1>
+                    <h2>Or, Why Another Language?</h2>
+					<p style="font-size: small;">
+                        <div>Patrick Walton</div>
+                        <div>@pcwalton</div>
+                        <div>Mozilla Research</div>
+                        <div>Los Angeles Rust Meetup, Aug. 2, 2014</div>
+                    </p>
+				</section>
+
+				<section>
+					<h2>The Line</h2>
+					<p style="border-bottom: solid 4px black;">
+						<span style="width: 7em; padding: 0 2em">C++</span>
+                        <span style="width: 7em; padding: 0 2em">Go</span>
+                        <span style="width: 7em; padding: 0 2em">Java</span>
+                        <span style="width: 7em; padding: 0 2em">Python</span>
+                    </p>
+					<p style="position: relative; text-align: right;">
+						<span style="display: block; float: left;">← Performance</span>
+                        Safety, productivity →
+                    </p>
+				</section>
+                
+                <section>
+                    <h2>The Line</h2>
+                    <ul>
+                        <li>There's no need to choose!</li>
+                        <li>We want all three: performance, safety, <em>and</em> productivity.</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <h2>Web Browsers and Rust</h2>
+                </section>
+                
+                <section>
+                    <h2>A Brief History</h2>
+                    <ul>
+                        <li>Around 2011 Mozilla decided it wanted to experiment with a next-generation parallel browser engine. (This project now exists: it's called Servo.)</li>
+                        <li>The first question: What language?</li>
+                        <li>Everything other than C++ would be a performance loss…</li>
+                        <li>…But doing extremely fine-grained parallelism in C++ would be like "juggling chainsaws" (Brendan Eich)</li>
+                    </ul>
+                </section>
+                
+                <section>
+                    <h2>Web browser demands</h2>
+                    <ul>
+                        <li>Web browsers are in an extremely constrained space.</li>
+                        <li>Modern browsers have the <em>basically the same extreme performance requirements as games do</em>, but are also <em>security-critical</em>.</li>
+                        <li>Consumers choose browsers based on speed, but the browser is the safeguard of all your personal information.</li>
+                        <li>Little room for compromise!</li>
+                    </ul>
+                </section>
+                
+                <section>
+                    <h2>Enter Rust</h2>
+                    <ul>
+                        <li>Development really started in 2010-2011. (Before that, it was basically just some sketches on paper.)</li>
+                        <li>Achieved self-hosting in 2011.</li>
+                        <li>
+                            Massive language changes from 2011 to present.
+                            <ul>
+                                <li>We originally didn't think we could get the language as low-level as it is today while remaining safe.</li>
+                                <li>2011 Rust: somewhat like a compiled Java.</li>
+                                <li>2014 Rust: hosts multiple proof-of-concept OS kernels.</li>
+                            </ul>
+                        </li>
+                        <li>On track for release or RC of 1.0 by the end of 2014.</li>
+                    </ul>
+                </section>
+                
+                <section>
+                    <h2>Whirlwind Tour of Rust Features</h2>
+                </section>
+                
+                <section>
+                    <h2>Performance</h2>
+                    <ul>
+                        <li>Rust strives to be as fast as modern, idiomatic C++.</li>
+                        <li>No garbage collection, direct control over memory management, SIMD, inline asm…</li>
+                        <li>We use LLVM in the same way <code>clang</code> does.</li>
+                        <li>There's always work to be done, but we have promising benchmark numbers (e.g. Servo, serde).</li>
+                    </ul>
+                </section>
+                
+                <section>
+                    <h2>Productivity</h2>
+                    <ul>
+                        <li>To name a few modern productivity features in Rust:
+                            <ul>
+                                <li>A Python-like, headerless module system</li>
+                                <li>Closures</li>
+                                <li>Pattern matching</li>
+                                <li>Generics with concepts (no more confusing template errors)</li>
+                                <li>Interfaces</li>
+                                <li>Lisp/Clojure-like macros for compile-time code generation</li>
+                            </ul>
+                        </li>
+                    </ul>
+                </section>
+                
+                <section>
+                    <h2>Safety</h2>
+                    <ul>
+                        <li>Memory-safe and data-race free.</li>
+                        <li>If safe Rust segfaults, it's our bug, not yours.</li>
+                        <li>The safety features have a learning curve, but in my experience they <em>speed you up overall</em>, because you spend less time in front of the debugger.</li>
+                        <li>Safety and productivity go hand-in-hand: you spend more time thinking about your problem and less time chasing down segfaults.</li>
+                        <li>Not to mention the security benefits!</li>
+                    </ul>
+                </section>
+                
+                <section>
+                    <h2>Community</h2>
+                    <ul>
+                        <li>The Rust community is growing!</li>
+                        <li>Lots of people interested in <em>performance</em> (e.g. game devs) and <em>safety</em> (e.g. functional programmers).</li>
+                        <li>
+                            <em>Absurdly</em> talented people from all over the world contributing to the core language.
+                            <ul>
+                                <li>Seriously, I file bugs and then I wake up to pull requests with fixes the next day.</li>
+                            </ul>
+                        </li>
+                        <li>An active set of IRC channels on <u>irc.mozilla.org</u>: #rust, #rust-gamedev, #rust-osdev, #rust-webdev, #rust-internals…</li>
+                    </ul>
+                </section>
+                
+                <section>
+                    <h2>Thank you!</h2>
+                    <h3>Questions?</h3>
+                </section>
+			</div>
+
+		</div>
+
+		<script src="lib/js/head.min.js"></script>
+		<script src="js/reveal.min.js"></script>
+
+		<script>
+
+			// Full list of configuration options available here:
+			// https://github.com/hakimel/reveal.js#configuration
+			Reveal.initialize({
+				controls: true,
+				progress: true,
+				history: true,
+				center: true,
+
+				theme: Reveal.getQueryHash().theme, // available themes are in /css/theme
+				transition: Reveal.getQueryHash().transition || 'default', // default/cube/page/concave/zoom/linear/fade/none
+
+				// Parallax scrolling
+				// parallaxBackgroundImage: 'https://s3.amazonaws.com/hakim-static/reveal-js/reveal-parallax-1.jpg',
+				// parallaxBackgroundSize: '2100px 900px',
+
+				// Optional libraries used to extend on reveal.js
+				dependencies: [
+					{ src: 'lib/js/classList.js', condition: function() { return !document.body.classList; } },
+					{ src: 'plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+					{ src: 'plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+					{ src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } },
+					{ src: 'plugin/zoom-js/zoom.js', async: true, condition: function() { return !!document.body.classList; } },
+					{ src: 'plugin/notes/notes.js', async: true, condition: function() { return !!document.body.classList; } }
+				]
+			});
+
+		</script>
+
+	</body>
+</html>
