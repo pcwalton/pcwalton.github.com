@@ -34,7 +34,7 @@ body.read-in-reader-mode-preanim > *:not(.read-frozen) {
 
 body.read-in-reader-mode-preanim > *:not(.read-frozen),
 body.read-in-reader-mode > *:not(.read-frozen) {
-    transition: opacity 1500ms;
+    transition: opacity 500ms;
 }
 
 .read-content-container {
@@ -45,6 +45,6 @@ body.read-in-reader-mode > *:not(.read-frozen) {
 }
 
 .read-frozen {
-    transition: top 1000ms, left 1000ms, width 1000ms, height 1000ms;
+    transition: top 1500ms, left 1500ms, width 1500ms, height 1500ms;
 }
 
