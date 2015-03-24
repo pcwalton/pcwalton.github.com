@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body {
+    background: #676767;
+    overflow: hidden;
+    font: 12px Helvetica;
+}
+main {
+    position: fixed;    /* comment this out to make it work in Servo :( */
+    overflow: scroll;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 25px;
+}
+footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 24px;
+    border-top: solid 1px #515151;
+    background: linear-gradient(top, #ececec, #d2d2d2);
+    background: -moz-linear-gradient(top, #ececec, #d2d2d2);
+    background: -webkit-linear-gradient(top, #ececec, #d2d2d2);
+    color: #6b6b6b;
+    z-index: 1;
+}
+.footer-box {
+    position: absolute;
+}
+#zoom-container {
+    padding: 1px 23px;
+    right: 16px;
+}
+#count-container {
+    left: 3px;
+    padding-top: 2px;
+}
+.zoom-icon {
+    content: "Hello";
+    position: absolute;
+    display: block;
+    background: url(glyphicons-4-user.png) center center no-repeat;
+    top: 0;
+    width: 23px;
+    height: 22px;
+    opacity: 0.5;
+}
+.zoom-icon.before {
+    background-size: 8px 8px;
+    left: 0;
+}
+.zoom-icon.after {
+    background-size: 14px 14px;
+    right: 0;
+}
+.photo {
+    background: url(mimi.jpg) center center / contain no-repeat;
+    display: inline-block;
+    filter: drop-shadow(0 3px 3px #444);
+    margin: 6px;
+    filter: drop-shadow(0 3px 3px #444);
+    -webkit-filter: drop-shadow(0 3px 3px #444);
+}
+</style>
+<style id=photo-rules>
+.photo {
+    width: 240px;
+    height: 180px;
+}
+</style>
+</head>
+<body>
+<main></main>
+<footer>
+    <div class=footer-box id=count-container>
+        <select id=count onchange="reload()">
+            <option value=100>100</option>
+            <option value=500>500</option>
+            <option value=1000>1,000</option>
+            <option value=3000>3,000</option>
+            <option value=5000 selected>5,000</option>
+            <option value=10000>10,000</option>
+        </select> photos loaded
+    </div>
+    <div class=footer-box id=zoom-container>
+        <div class="zoom-icon before"></div>
+        <input id=zoom-slider type=range min=10 max=500 value=240 oninput="zoom()" onchange="zoom()"></input>
+        <div class="zoom-icon after"></div>
+    </div>
+</footer>
+<script>
+// xorshift
+function Rand() {
+    this.x = 3141;
+    this.y = 5926;
+    this.z = 5358;
+    this.w = 9793;
+    return this;
+}
+
+Rand.prototype.rand = function() {
+    var t = this.x ^ (this.x << 11);
+    this.x = this.y; this.y = this.z; this.z = this.w;
+    this.w = this.w ^ (this.w >> 19) ^ t ^ (t >> 8);
+    return this.w;
+}
+
+var MAX_PHOTO = 11;
+
+function zoom() {
+    var width = document.getElementById('zoom-slider').value;
+    var height = width * 3 / 4;
+    document.getElementById('photo-rules').innerHTML =
+        ".photo { width: " + width + "px; height: " + height + "px; }";
+}
+
+function reload() {
+    var rng = new Rand();
+    var photoCount = document.getElementById('count').value;
+    var string = "";
+    for (var i = 0; i < photoCount; i += 1000) {
+        string += "<div class=photo-divider>";
+        for (var j = i; j < Math.min(photoCount, j + 1000); j++) {
+            var photoId = rng.rand() % MAX_PHOTO;
+            var photo = "photo" + (photoId < 10 ? "0" : "") + photoId + ".jpg";
+            string += "<div class=photo style='background-image: url(" + photo + ")'></div>";
+        }
+        string += "</div>";
+    }
+    document.getElementsByTagName("main")[0].innerHTML = string;
+}
+
+document.getElementById('zoom-slider').value = 240;
+document.getElementById('count').value = 5000;
+reload();
+</script>
+</body>
+</html>
+
