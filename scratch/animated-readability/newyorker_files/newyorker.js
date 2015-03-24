@@ -1,1 +1,0 @@
-PARSELY.pInit({"apikey":"newyorker.com","settings":{"debug":false,"widget":false,"tracker":true},"customizations":null,"track_ip_addresses":true,"bundle":"/code/ptrack-v0.4.0-engaged-time.js","track_third_party_cookies":true,"uuid":"e1ae65d8-d063-4a01-9c61-d65eb3add260"});
