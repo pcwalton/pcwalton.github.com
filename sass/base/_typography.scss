@@ -16,7 +16,7 @@ $header-subtitle-font-family: $heading-font-family !default;
 
 body > header h1 {
   font-size: 54px;
-  @extend .heading;
+  font-family: $heading-font-family;
   font-family: $header-title-font-family;
   line-height: 1.2em;
   margin-bottom: 0.6667em;
@@ -28,7 +28,7 @@ body > header h2 {
 body {
   line-height: 1.5em;
   color: $text-color;
-  @extend .sans;
+  font-family: $sans;
 }
 h1 {
   font-size: 30px;
@@ -41,7 +41,7 @@ h1 {
 }
 
 #{headings()}{
-  @extend .heading;
+  font-family: $heading-font-family;
   text-rendering: optimizelegibility;
   margin-bottom: 1em;
   font-weight: bold;
@@ -94,7 +94,7 @@ del, s { text-decoration: line-through; }
 
 abbr, acronym { border-bottom: 1px dotted; cursor: help; }
 
-pre, code, tt { @extend .mono; }
+pre, code, tt { font-family: $mono; }
 
 sub, sup { line-height: 0; }
 

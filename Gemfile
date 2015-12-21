@@ -1,6 +1,7 @@
 source "http://rubygems.org"
 
 group :development do
+  gem 'sass'
   gem 'rake'
   gem 'rack'
   gem 'jekyll'
@@ -15,3 +16,5 @@ group :development do
 end
 
 gem 'sinatra', '1.2.6'
+gem 'iconv'
+
