@@ -77,13 +77,13 @@ where `$$a_1$$` = 0.278393, `$$a_2$$` = 0.230389, `$$a_3$$` = 0.000972, and `$$a
 Now let's finish simplifying `$$C(u,v)$$`:
 
 	$$C_{"blurred box"}(u,v) ~~
-		int_{y_{"min"}}^{y_{"max"}} G(y) int_{x_{"min"}}^{x_{"max"}} G(x-u) dxdy$$
+		int_{y_{"min"}}^{y_{"max"}} G(y-v) int_{x_{"min"}}^{x_{"max"}} G(x-u) dxdy$$
 	
-	$$= int_{y_{"min"}}^{y_{"max"}} G(y)
+	$$= int_{y_{"min"}}^{y_{"max"}} G(y-v)
 		(1/2 "erf"((x_{"max"}-u)/(sigma sqrt(2))) - 1/2 "erf"((x_{"min"}-u)/(sigma sqrt(2)))) dy$$
 	
 	$$= 1/2 "erf"((x_{"max"}-u)/(sigma sqrt(2))) - 1/2 "erf"((x_{"min"}-u)/(sigma sqrt(2)))
-		int_{y_{"min"}}^{y_{"max"}} G(y-v) dy$$
+		int_{y_{"min"}-v}^{y_{"max"}} G(y-v) dy$$
 		
 	$$= 1/4 ("erf"((x_{"max"}-u)/(sigma sqrt(2))) - "erf"((x_{"min"}-u)/(sigma sqrt(2))))
 			("erf"((y_{"max"}-v)/(sigma sqrt(2))) - "erf"((y_{"min"}-v)/(sigma sqrt(2))))$$
@@ -100,7 +100,7 @@ where `$$C_{"rounded box"}(x,y)$$` is 1.0 if the point $$(x,y)$$ is inside the b
 
 Adding some bounds to the sums gives us:
 
-	$$C(x,y) = sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}} G(x)G(y)
+	$$C(u,v) = sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}} G(x-u)G(y-v)
 		C_{"rounded box"}(x,y)$$
 
 `$$C_{"rounded box"}(x,y)$$` is 1.0 if `$$C_{"box"}(x,y)$$` is 1.0—i.e. if the point `$$(x,y)$$` is inside the unrounded box—*and* the point is either inside the ellipse defined by the value of the `border-radius` property or outside the border corners entirely. Let `$$C_{"inside corners"}(x,y)$$` be 1.0 if this latter condition holds and 0.0 otherwise—i.e. 1.0 if the point `$$(x,y)$$` is inside the ellipse defined by the corners or completely outside the corner area. Graphically, `$$C_{"inside corners"}(x,y)$$` looks like a blurry version of this:
@@ -113,47 +113,47 @@ Adding some bounds to the sums gives us:
 
 Then, because `$$C_{"box"}(x,y)$$` is always 1.0 within the sum bounds, `$$C_{"rounded box"}(x,y)$$` reduces to `$$C_{"inside corners"}(x,y)$$`:
 
-	$$C(x,y) = sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}} G(x)G(y)
+	$$C(u,v) = sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}} G(x-u)G(y-v)
 		C_{"inside corners"}(x,y)$$
 
 Now let `$$C_{"outside corners"}(x,y)$$` be the inverse of `$$C_{"inside corners"}(x,y)$$`—i.e. `$$C_{"outside corners"}(x,y) = 1.0 - C_{"inside corners"}(x,y)$$`. Intuitively, `$$C_{"outside corners"}(x,y)$$` is 1.0 if `$$(x,y)$$` is *inside* the box but *outside* the rounded corners—graphically, it looks like one <span style="display: inline-block; position: relative; width: 1em; height: 1em; overflow: hidden;"><span style="display: block; position: absolute; border-radius: 100%; width: 200%; height: 200%; top: -100%; left: -100%; border: solid black 1em;"></span></span> shape for each corner. With this, we can rearrange the formula above:
 
-	$$C(x,y) = sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}} G(x)G(y)
+	$$C(u,v) = sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}} G(x-u)G(y-v)
 		(1.0 - C_{"outside corners"}(x,y))$$
 	
-	$$= sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}} G(x)G(y) -
-		G(x)G(y)C_{"outside corners"}(x,y)$$
+	$$= sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}} G(x-u)G(y-v) -
+		G(x-u)G(y-v)C_{"outside corners"}(x,y)$$
 		
-	$$= (sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}} G(x)G(y)) -
+	$$= (sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}} G(x-u)G(y-v)) -
 		sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}}
-			G(x)G(y)C_{"outside corners"}(x,y)$$
+			G(x-u)G(y-v)C_{"outside corners"}(x,y)$$
 			
-	$$= C_{"blurred box"}(x,y) -
+	$$= C_{"blurred box"}(u,v) -
 		sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}}
-			G(x)G(y)C_{"outside corners"}(x,y)$$
+			G(x-u)G(y-v)C_{"outside corners"}(x,y)$$
 
 We've now arrived at our basic strategy for handling border corners: compute the color of the blurred unrounded box, then "cut out" the blurred border corners by subtracting their color values. We already have a closed form formula for `$$C_{"blurred box"}(x,y)$$`, so let's focus on the second term. We'll call it `$$C_{"blurred outside corners"}(x,y)$$`:
 
-	$$C_{"blurred outside corners"}(x,y) = sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}}
-			G(x)G(y)C_{"outside corners"}(x,y)$$
+	$$C_{"blurred outside corners"}(u,v) = sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}}
+			G(x-u)G(y-v)C_{"outside corners"}(x,y)$$
 
 Let's subdivide `$$C_{"outside corners"}(x,y)$$` into the four corners: top left, top right, bottom right, and bottom left. This is valid because every point belongs to at most one of the corners per the CSS specification—corners cannot overlap.
 
-	$$C_{"blurred outside corners"}(x,y) = sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}}
-			G(x)G(y)(C_{"outside TL corner"}(x,y) + C_{"outside TR corner"}(x,y)
+	$$C_{"blurred outside corners"}(u,v) = sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}}
+			G(x-u)G(y-v)(C_{"outside TL corner"}(x,y) + C_{"outside TR corner"}(x,y)
 			+ C_{"outside BR corner"}(x,y) + C_{"outside BL corner"}(x,y))$$
 	
 	$$= (sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}}
-			G(x)G(y)(C_{"outside TL corner"}(x,y) + C_{"outside TR corner"}(x,y))) +
+			G(x-u)G(y-v)(C_{"outside TL corner"}(x,y) + C_{"outside TR corner"}(x,y))) +
 			sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}}
-				G(x)G(y)(C_{"outside BR corner"}(x,y) + C_{"outside BL corner"}(x,y))$$
+				G(x-u)G(y-v)(C_{"outside BR corner"}(x,y) + C_{"outside BL corner"}(x,y))$$
 				
-	$$= (sum_{y=y_{"min"}}^{y_{"max"}} G(y)
-		((sum_{x=x_{"min"}}^{x_{"max"}} G(x)C_{"outside TL corner"}(x,y)) +
-		sum_{x=x_{"min"}}^{x_{"max"}} G(x) C_{"outside TR corner"}(x,y))) +
-		sum_{y=y_{"min"}}^{y_{"max"}} G(y)
-				((sum_{x=x_{"min"}}^{x_{"max"}} G(x)C_{"outside BL corner"}(x,y)) +
-				sum_{x=x_{"min"}}^{x_{"max"}} G(x)C_{"outside BR corner"}(x,y))$$
+	$$= (sum_{y=y_{"min"}}^{y_{"max"}} G(y-v)
+		((sum_{x=x_{"min"}}^{x_{"max"}} G(x-u)C_{"outside TL corner"}(x,y)) +
+		sum_{x=x_{"min"}}^{x_{"max"}} G(x-u) C_{"outside TR corner"}(x,y))) +
+		sum_{y=y_{"min"}}^{y_{"max"}} G(y-v)
+				((sum_{x=x_{"min"}}^{x_{"max"}} G(x-u)C_{"outside BL corner"}(x,y)) +
+				sum_{x=x_{"min"}}^{x_{"max"}} G(x-u)C_{"outside BR corner"}(x,y))$$
 
 Let `$$a$$` and `$$b$$` be the horizontal and vertical border radii, respectively. The vertical boundaries of the top left and top right corners are defined by `$$y_min$$` on the top and `$$y_min + b$$` on the bottom; `$$C_{"outside TL corner"}(x,y)$$` and `$$C_{"outside TR corner"}(x,y)$$` will evaluate to 0 if `$$y$$` lies outside this range. Likewise, the vertical boundaries of the bottom left and bottom right corners are `$$y_max - b$$` and `$$y_max$$`.
 
@@ -161,23 +161,23 @@ Let `$$a$$` and `$$b$$` be the horizontal and vertical border radii, respectivel
 
 Armed with this simplification, we can adjust the vertical bounds of the sums in our formula:
 
-	$$C_{"blurred outside corners"}(x,y) =
-		(sum_{y=y_{"min"}}^{y_{"min"} + b} G(y)
-			((sum_{x=x_{"min"}}^{x_{"max"}} G(x)C_{"outside TL corner"}(x,y)) +
-			sum_{x=x_{"min"}}^{x_{"max"}} G(x) C_{"outside TR corner"}(x,y))) +
-		sum_{y=y_{"max"} - b}^{y_{"max"}} G(y)
-				((sum_{x=x_{"min"}}^{x_{"max"}} G(x)C_{"outside BL corner"}(x,y)) +
-				sum_{x=x_{"min"}}^{x_{"max"}} G(x)C_{"outside BR corner"}(x,y))$$
+	$$C_{"blurred outside corners"}(u,v) =
+		(sum_{y=y_{"min"}}^{y_{"min"} + b} G(y-v)
+			((sum_{x=x_{"min"}}^{x_{"max"}} G(x-u)C_{"outside TL corner"}(x,y)) +
+			sum_{x=x_{"min"}}^{x_{"max"}} G(x-u) C_{"outside TR corner"}(x,y))) +
+		sum_{y=y_{"max"} - b}^{y_{"max"}} G(y-v)
+				((sum_{x=x_{"min"}}^{x_{"max"}} G(x-u)C_{"outside BL corner"}(x,y)) +
+				sum_{x=x_{"min"}}^{x_{"max"}} G(x-u)C_{"outside BR corner"}(x,y))$$
 
 And, following similar logic, we can adjust their horizontal bounds:
 
-	$$C_{"blurred outside corners"}(x,y) =
-		(sum_{y=y_{"min"}}^{y_{"min"} + b} G(y)
-			((sum_{x=x_{"min"}}^{x_{"min"} + a} G(x)C_{"outside TL corner"}(x,y)) +
-			sum_{x=x_{"max"} - a}^{x_{"max"}} G(x) C_{"outside TR corner"}(x,y))) +
-		sum_{y=y_{"max"} - b}^{y_{"max"}} G(y)
-				((sum_{x=x_{"min"}}^{x_{"min"} + a} G(x)C_{"outside BL corner"}(x,y)) +
-				sum_{x=x_{"max"} - a}^{x_{"max"}} G(x)C_{"outside BR corner"}(x,y))$$
+	$$C_{"blurred outside corners"}(u,v) =
+		(sum_{y=y_{"min"}}^{y_{"min"} + b} G(y-v)
+			((sum_{x=x_{"min"}}^{x_{"min"} + a} G(x-u)C_{"outside TL corner"}(x,y)) +
+			sum_{x=x_{"max"} - a}^{x_{"max"}} G(x-u) C_{"outside TR corner"}(x,y))) +
+		sum_{y=y_{"max"} - b}^{y_{"max"}} G(y-v)
+				((sum_{x=x_{"min"}}^{x_{"min"} + a} G(x-u)C_{"outside BL corner"}(x,y)) +
+				sum_{x=x_{"max"} - a}^{x_{"max"}} G(x-u)C_{"outside BR corner"}(x,y))$$
 
 At this point, we can work on eliminating all of the `$$C_{"outside corner"}$$` functions from our expression. Let's look at the definition of `$$C_{"outside TR corner"}(x,y)$$`. `$$C_{"outside TR corner"}(x,y)$$` is 1.0 if the point `$$(x,y)$$` is inside the rectangle formed by the border corner but outside the ellipse that defines that corner. That is, `$$C_{"outside TR corner"}(x,y)$$` is 1.0 if `$$y_{"min"} <= y <= y_{"min"} + b$$` and `$$E_{"TR"}(y) <= x <= x_{"max"}$$`, where `$$E_{"TR"}(y)$$` defines the horizontal position of the point on the ellipse with the given `$$y$$` coordinate. `$$E_{"TR"}(y)$$` can easily be derived from the equation of an ellipse centered at `$$(x_0, y_0)$$:
 
@@ -193,13 +193,13 @@ Parallel reasoning applies to the other corners.
 
 Now that we have bounds within which each `$$C_{"outside corner"}$$` function evaluates to 1.0, we can eliminate all of these functions from the definition of `$$C_{"blurred outside corners"}$$`:
 
-	$$C_{"blurred outside corners"}(x,y) =
-		(sum_{y=y_{"min"}}^{y_{"min"} + b} G(y)
-			((sum_{x=x_{"min"}}^{E_{"TL"}(y)} G(x)) +
-			sum_{x=E_{"TR"}(y)}^{x_{"max"}} G(x))) +
-		sum_{y=y_{"max"} - b}^{y_{"max"}} G(y)
-				((sum_{x=x_{"min"}}^{E_{"BL"}(y)} G(x)) +
-				sum_{x=E_{"BR"}(y)}^{x_{"max"}} G(x))$$
+	$$C_{"blurred outside corners"}(u,v) =
+		(sum_{y=y_{"min"}}^{y_{"min"} + b} G(y-v)
+			((sum_{x=x_{"min"}}^{E_{"TL"}(y)} G(x-u)) +
+			sum_{x=E_{"TR"}(y)}^{x_{"max"}} G(x-u))) +
+		sum_{y=y_{"max"} - b}^{y_{"max"}} G(y-v)
+				((sum_{x=x_{"min"}}^{E_{"BL"}(y)} G(x-u)) +
+				sum_{x=E_{"BR"}(y)}^{x_{"max"}} G(x-u))$$
 
 To simplify this a bit further, let's define an intermediate function:
 
@@ -207,48 +207,48 @@ To simplify this a bit further, let's define an intermediate function:
 
 And rewrite `$$C_{"blurred outside corners"}(x,y)$$` as follows:
 
-	$$C_{"blurred outside corners"}(x,y) =
-		(sum_{y=y_{"min"}}^{y_{"min"} + b} G(y)
-			((sum_{x=x_{"min"}}^{x_{"min"} + a - E(y, y_{"min"} + b)} G(x)) +
-			sum_{x=x_{"max"} - a + E(y, y_{"min"} + b)}^{x_{"max"}} G(x))) +
-		(sum_{y=y_{"max" - b}}^{y_{"max"}} G(y)
-			((sum_{x=x_{"min"}}^{x_{"min"} + a - E(y, y_{"max"} - b)} G(x)) +
-			sum_{x=x_{"max"} - a + E(y, y_{"max"} - b)}^{x_{"max"}} G(x)))$$
+	$$C_{"blurred outside corners"}(u,v) =
+		(sum_{y=y_{"min"}}^{y_{"min"} + b} G(y-v)
+			((sum_{x=x_{"min"}}^{x_{"min"} + a - E(y, y_{"min"} + b)} G(x-u)) +
+			sum_{x=x_{"max"} - a + E(y, y_{"min"} + b)}^{x_{"max"}} G(x-u))) +
+		(sum_{y=y_{"max" - b}}^{y_{"max"}} G(y-v)
+			((sum_{x=x_{"min"}}^{x_{"min"} + a - E(y, y_{"max"} - b)} G(x-u)) +
+			sum_{x=x_{"max"} - a + E(y, y_{"max"} - b)}^{x_{"max"}} G(x-u)))$$
 
 Now we simply follow the procedure we did before for the box. Approximate the inner sums with integrals:
 
-	$$C_{"blurred outside corners"}(x,y) ~~
-		(sum_{y=y_{"min"}}^{y_{"min"} + b} G(y)
-			((int_{x_{"min"}}^{x_{"min"} + a - E(y, y_{"min"} + b)} G(x)dx) +
-			int_{x_{"max"} - a + E(y, y_{"min"} + b)}^{x_{"max"}} G(x)dx)) +
-		(sum_{y=y_{"max" - b}}^{y_{"max"}} G(y)
-			((int_{x_{"min"}}^{x_{"min"} + a - E(y, y_{"max"} - b)} G(x)dx) +
-			int_{x_{"max"} - a + E(y, y_{"max"} - b)}^{x_{"max"}} G(x)dx))$$
+	$$C_{"blurred outside corners"}(u,v) ~~
+		(sum_{y=y_{"min"}}^{y_{"min"} + b} G(y-v)
+			((int_{x_{"min"}}^{x_{"min"} + a - E(y, y_{"min"} + b)} G(x-u)dx) +
+			int_{x_{"max"} - a + E(y, y_{"min"} + b)}^{x_{"max"}} G(x-u)dx)) +
+		(sum_{y=y_{"max" - b}}^{y_{"max"}} G(y-v)
+			((int_{x_{"min"}}^{x_{"min"} + a - E(y, y_{"max"} - b)} G(x-u)dx) +
+			int_{x_{"max"} - a + E(y, y_{"max"} - b)}^{x_{"max"}} G(x-u)dx))$$
 
 Replace `$$int G(x)dx$$` with its closed-form solution:
 
-	$$C_{"blurred outside corners"}(x,y) ~~
-		(sum_{y=y_{"min"}}^{y_{"min"} + b} G(y)
-			(1/2 "erf"((x_{"min"} + a - E(y, y_{"min"} + b)) / (sigma sqrt(2))) -
-			 1/2 "erf"(x_{"min"} / (sigma sqrt(2))) +
-			 (1/2 "erf"(x_{"max"} / (sigma sqrt(2))) -
-			  1/2 "erf"((x_{"max"} - a + E(y, y_{"min"} + b)) / (sigma sqrt(2)))))) +
-		 sum_{y=y_{"max"} - b}^{y_{"max"}} G(y)
-		 			(1/2 "erf"((x_{"min"} + a - E(y, y_{"max"} - b)) / (sigma sqrt(2))) -
-		 			 1/2 "erf"(x_{"min"} / (sigma sqrt(2))) +
-		 			 (1/2 "erf"(x_{"max"} / (sigma sqrt(2))) -
-		 			  1/2 "erf"((x_{"max"} - a + E(y, y_{"max"} - b)) / (sigma sqrt(2)))))$$
+	$$C_{"blurred outside corners"}(u,v) ~~
+		(sum_{y=y_{"min"}}^{y_{"min"} + b} G(y-v)
+			(1/2 "erf"((x_{"min"} - u + a - E(y, y_{"min"} - v + b)) / (sigma sqrt(2))) -
+			 1/2 "erf"((x_{"min"} - u) / (sigma sqrt(2))) +
+			 (1/2 "erf"((x_{"max"} - u) / (sigma sqrt(2))) -
+			  1/2 "erf"((x_{"max"} - u - a + E(y, y_{"min"} - v + b)) / (sigma sqrt(2)))))) +
+		 sum_{y=y_{"max"} - b}^{y_{"max"}} G(y-v)
+		 			(1/2 "erf"((x_{"min"} - u + a - E(y, y_{"max"} - v - b)) / (sigma sqrt(2))) -
+		 			 1/2 "erf"((x_{"min"} - u) / (sigma sqrt(2))) +
+		 			 (1/2 "erf"((x_{"max"} - u) / (sigma sqrt(2))) -
+		 			  1/2 "erf"((x_{"max"} - u - a + E(y, y_{"max"} - v - b)) / (sigma sqrt(2)))))$$
 
-	$$= 1/2 ((sum_{y=y_{"min"}}^{y_{"min"} + b} G(y)
-			("erf"((x_{"min"} + a - E(y, y_{"min"} + b)) / (sigma sqrt(2))) -
-			 "erf"(x_{"min"} / (sigma sqrt(2))) +
-			 ("erf"(x_{"max"} / (sigma sqrt(2))) -
-			  "erf"((x_{"max"} - a + E(y, y_{"min"} + b)) / (sigma sqrt(2)))))) +
-	 sum_{y=y_{"max"} - b}^{y_{"max"}} G(y)
-	 			("erf"((x_{"min"} + a - E(y, y_{"max"} - b)) / (sigma sqrt(2))) -
-	 			 "erf"(x_{"min"} / (sigma sqrt(2))) +
-	 			 ("erf"(x_{"max"} / (sigma sqrt(2))) -
-	 			  "erf"((x_{"max"} - a + E(y, y_{"max"} - b)) / (sigma sqrt(2))))))$$
+	$$= 1/2 (sum_{y=y_{"min"}}^{y_{"min"} + b} G(y-v)
+			("erf"((x_{"min"} - u + a - E(y, y_{"min"} - v + b)) / (sigma sqrt(2))) -
+			 "erf"((x_{"min"} - u) / (sigma sqrt(2))) +
+			 ("erf"((x_{"max"} - u) / (sigma sqrt(2))) -
+			  "erf"((x_{"max"} - u - a + E(y, y_{"min"} - v + b)) / (sigma sqrt(2)))))) +
+		 sum_{y=y_{"max"} - b}^{y_{"max"}} G(y-v)
+		 			("erf"((x_{"min"} - u + a - E(y, y_{"max"} - v - b)) / (sigma sqrt(2))) -
+		 			 "erf"((x_{"min"} - u) / (sigma sqrt(2))) +
+		 			 ("erf"((x_{"max"} - u) / (sigma sqrt(2))) -
+		 			  "erf"((x_{"max"} - u - a + E(y, y_{"max"} - v - b)) / (sigma sqrt(2)))))$$
 
 And we're done! Unfortunately, this is as far as we can go with standard mathematical functions. Because the parameters to the error function depend on `$$y$$`, we have no choice but to evaluate the inner sum numerically. Still, this only results in [one loop in the shader](https://github.com/glennw/webrender/blob/d57057470cb2bddf0c8ece3fc29cfbe5d03114a2/res/box_shadow.fs.glsl#L86).
 
