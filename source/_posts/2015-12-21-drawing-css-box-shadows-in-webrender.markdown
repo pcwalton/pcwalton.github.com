@@ -14,9 +14,9 @@ The key trick used in WebRender is to take advantage of the fact that we're blur
 
 The remainder of this post will be a dive into the logic of the fragment shader itself. The [source code](https://github.com/glennw/webrender/blob/d57057470cb2bddf0c8ece3fc29cfbe5d03114a2/res/box_shadow.fs.glsl) may be useful as a reference.
 
-For those unfamiliar with OpenGL, per-pixel logic is expressed with a *fragment shader* (sometimes called a *pixel shader*). A fragment shader (in this case) is conceptually a function that maps arbitrary per-pixel input data to the RGB values defining the resulting color for that pixel. In our case, the input data for each pixel simply consists of the `$$x$$` and `$$y$$` coordinates for that pixel. We'll call our function `$$RGB(x,y)$$` and define it as follows:
+For those unfamiliar with OpenGL, per-pixel logic is expressed with a *fragment shader* (sometimes called a *pixel shader*). A fragment shader (in this case) is conceptually a function that maps arbitrary per-pixel input data to the RGB values defining the resulting color for that pixel. In our case, the input data for each pixel simply consists of the `$$x$$` and `$$y$$` coordinates for that pixel. We'll call our function `$$RGB(u,v)$$` and define it as follows:
 
-	$$RGB(x,y) = sum_{y=-oo}^{oo} sum_{x=-oo}^{oo}G(x)G(y)RGB_{"rounded box"}(x,y)$$
+	$$RGB(u,v) = sum_{y=-oo}^{oo} sum_{x=-oo}^{oo}G(x-u)G(y-v)RGB_{"rounded box"}(x,y)$$
 
 Here, `$$RGB_{"rounded box"}(x,y)$$` is the color of the unblurred, possibly-rounded box at the coordinate `$$(x,y)$$`, and `$$G(x)$$` is the Gaussian function used for the blur:
 
@@ -30,43 +30,43 @@ Since CSS box shadows blur solid color boxes, the color of each pixel is either 
 
 and
 
-	$$C(x,y) = sum_{y=-oo}^{oo} sum_{x=-oo}^{oo}G(x)G(y)C_{"rounded box"}(x,y)$$
+	$$C(u,v) = sum_{y=-oo}^{oo} sum_{x=-oo}^{oo}G(x-u)G(y-v)C_{"rounded box"}(x,y)$$
 
 where `$$C_{"rounded box"}(x,y)$$` is 1.0 if the point $$(x,y)$$ is inside the unblurred, possibly-rounded box and 0.0 otherwise.
 
 Now let's start with the simple case, in which the box is unrounded. We'll call this function `$$C_{"blurred box"}$$`:
 
-	$$C_{"blurred box"}(x,y) = sum_{y=-oo}^{oo} sum_{x=-oo}^{oo}G(x)G(y)C_{"box"}(x,y)$$
+	$$C_{"blurred box"}(u,v) = sum_{y=-oo}^{oo} sum_{x=-oo}^{oo}G(x-u)G(y-v)C_{"box"}(x,y)$$
 
 where `$$C_{"box"}(x,y)$$` is 1.0 if the point $$(x,y)$$ is inside the box and 0.0 otherwise.
 
 Let `$$x_{"min"}, x_{"max"}, y_{"min"}, y_{"max"}$$` be the left, right, top, and bottom extents of the box respectively. Then `$$C_{"box"}(x,y)$$` is 1.0 if `$$x_{"min"} <= x <= x_{"max"}$$` and `$$y_{"min"} <= y <= y_{"max"}$$` and 0.0 otherwise. Now let's rearrange `$$C_{"blurred box"}(x,y)$$` above:
 
-	$$C_{"blurred box"}(x,y) =
+	$$C_{"blurred box"}(u,v) =
 		(sum_{y=-oo}^{y_{"min"} - 1}
-			sum_{x=-oo}^{x=oo} G(x)G(y)C_{"box"}(x,y)) +
+			sum_{x=-oo}^{x=oo} G(x-u)G(y-v)C_{"box"}(x,y)) +
 		(sum_{y=y_{"min"}}^{y_{"max"}}
-			(sum_{x=-oo}^{x_{"min"}-1} G(x)G(y)C_{"box"}(x,y)) +
-			(sum_{x=x_{"min"}}^{x_{"max"}} G(x)G(y)C_{"box"}(x,y)) +
-			(sum_{x=x_{"max"}+1}^{x=oo} G(x)G(y)C_{"box"}(x,y))) +
+			(sum_{x=-oo}^{x_{"min"}-1} G(x-u)G(y-v)C_{"box"}(x,y)) +
+			(sum_{x=x_{"min"}}^{x_{"max"}} G(x-u)G(y-v)C_{"box"}(x,y)) +
+			(sum_{x=x_{"max"}+1}^{x=oo} G(x-u)G(y-v)C_{"box"}(x,y))) +
 		(sum_{y=y_{"max"} + 1}^{oo}
 			sum_{x=-oo}^{x=oo} G(x)G(y)C_{"box"}(x,y))$$
 
 We can now eliminate several of the intermediate sums, along with `$$C_{"box"}(x,y)$$`, using its definition and the sum bounds:
 
-	$$C_{"blurred box"}(x,y) = sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}} G(x)G(y)$$
+	$$C_{"blurred box"}(u,v) = sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}} G(x-u)G(y-v)$$
 
 Now let's simplify this expression to a closed form. To begin with, we'll approximate the sums with integrals:
 
-	$$C_{"blurred box"}(x,y) ~~ int_{y_{"min"}}^{y_{"max"}} int_{x_{"min"}}^{x_{"max"}} G(x)G(y) dxdy$$
+	$$C_{"blurred box"}(u,v) ~~ int_{y_{"min"}}^{y_{"max"}} int_{x_{"min"}}^{x_{"max"}} G(x-u)G(y-v) dxdy$$
 
-	$$= int_{y_{"min"}}^{y_{"max"}} G(y) int_{x_{"min"}}^{x_{"max"}} G(x) dxdy$$
+	$$= int_{y_{"min"}}^{y_{"max"}} G(y-v) int_{x_{"min"}}^{x_{"max"}} G(x-u) dxdy$$
 
 Now the inner integral can be evaluated to a closed form:
 
-	$$int_{x_{"min"}}^{x_{"max"}}G(x)dx
-		= int_{x_{"min"}}^{x_{"max"}}1/sqrt(2 pi sigma^2) e^(-x^2/(2 sigma^2))dx
-		= 1/2 "erf"(x_{"max"}/(sigma sqrt(2))) - 1/2 "erf"(x_{"min"}/(sigma sqrt(2)))$$
+	$$int_{x_{"min"}}^{x_{"max"}}G(x-u)dx
+		= int_{x_{"min"}}^{x_{"max"}}1/sqrt(2 pi sigma^2) e^(-(x-u)^2/(2 sigma^2))dx
+		= 1/2 "erf"((x_{"max"}-u)/(sigma sqrt(2))) - 1/2 "erf"((x_{"min"}-u)/(sigma sqrt(2)))$$
 
 `$$"erf"(x)$$` here is the [Gauss error function](https://en.wikipedia.org/wiki/Error_function). It is not found in GLSL (though it is found in `<math.h>`), but it does have the following [approximation](https://en.wikipedia.org/wiki/Error_function#Approximation_with_elementary_functions) suitable for evaluation on the GPU:
 
@@ -74,19 +74,19 @@ Now the inner integral can be evaluated to a closed form:
 
 where `$$a_1$$` = 0.278393, `$$a_2$$` = 0.230389, `$$a_3$$` = 0.000972, and `$$a_4$$` = 0.078108.
 
-Now let's finish simplifying `$$C(x,y)$$`:
+Now let's finish simplifying `$$C(u,v)$$`:
 
-	$$C_{"blurred box"}(x,y) ~~
-		int_{y_{"min"}}^{y_{"max"}} G(y) int_{x_{"min"}}^{x_{"max"}} G(x) dxdy$$
+	$$C_{"blurred box"}(u,v) ~~
+		int_{y_{"min"}}^{y_{"max"}} G(y) int_{x_{"min"}}^{x_{"max"}} G(x-u) dxdy$$
 	
 	$$= int_{y_{"min"}}^{y_{"max"}} G(y)
-		(1/2 "erf"(x_{"max"}/(sigma sqrt(2))) - 1/2 "erf"(x_{"min"}/(sigma sqrt(2)))) dy$$
+		(1/2 "erf"((x_{"max"}-u)/(sigma sqrt(2))) - 1/2 "erf"((x_{"min"}-u)/(sigma sqrt(2)))) dy$$
 	
-	$$= 1/2 "erf"(x_{"max"}/(sigma sqrt(2))) - 1/2 "erf"(x_{"min"}/(sigma sqrt(2)))
-		int_{y_{"min"}}^{y_{"max"}} G(y) dy$$
+	$$= 1/2 "erf"((x_{"max"}-u)/(sigma sqrt(2))) - 1/2 "erf"((x_{"min"}-u)/(sigma sqrt(2)))
+		int_{y_{"min"}}^{y_{"max"}} G(y-v) dy$$
 		
-	$$= 1/4 ("erf"(x_{"max"}/(sigma sqrt(2))) - "erf"(x_{"min"}/(sigma sqrt(2))))
-			("erf"(y_{"max"}/(sigma sqrt(2))) - "erf"(y_{"min"}/(sigma sqrt(2))))$$
+	$$= 1/4 ("erf"((x_{"max"}-u)/(sigma sqrt(2))) - "erf"((x_{"min"}-u)/(sigma sqrt(2))))
+			("erf"((y_{"max"}-v)/(sigma sqrt(2))) - "erf"((y_{"min"}-v)/(sigma sqrt(2))))$$
 
 And this gives us our closed form formula for the color of the blurred box.
 
@@ -94,7 +94,7 @@ Now for the real meat of the shader: the handling of nonzero border radii. CSS a
 
 As before, the basic function to compute the pixel color looks like this:
 
-	$$C(x,y) = sum_{y=-oo}^{oo} sum_{x=-oo}^{oo}G(x)G(y)C_{"rounded box"}(x,y)$$
+	$$C(u,v) = sum_{y=-oo}^{oo} sum_{x=-oo}^{oo}G(x-u)G(y-v)C_{"rounded box"}(x,y)$$
 
 where `$$C_{"rounded box"}(x,y)$$` is 1.0 if the point $$(x,y)$$ is inside the box (now with rounded corners) and 0.0 otherwise.
 
