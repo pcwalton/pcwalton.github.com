@@ -25,12 +25,12 @@ security/safety.
 
 To illustrate what it means to be both practical and fast, consider these two graphs:
 
-<a href="images/post-images/pathfinder-rasterize.svg"><!--
---><img alt="Rasterization performance" src="images/post-images/pathfinder-rasterize.svg"><!--
+<a href="/images/post-images/pathfinder-rasterize.svg"><!--
+--><img alt="Rasterization performance" src="/images/post-images/pathfinder-rasterize.svg"><!--
 --></a>
 
-<a href="images/post-images/pathfinder-setup.svg"><!--
---><img alt="Setup performance" src="images/post-images/pathfinder-setup.svg"><!--
+<a href="/images/post-images/pathfinder-setup.svg"><!--
+--><img alt="Setup performance" src="/images/post-images/pathfinder-setup.svg"><!--
 --></a>
 
 (Click each graph for a larger version.)
