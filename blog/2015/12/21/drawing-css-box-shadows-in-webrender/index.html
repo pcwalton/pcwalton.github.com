@@ -1,0 +1,529 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Drawing CSS Box Shadows in WebRender - pcwalton</title>
+  <meta name="author" content="Patrick Walton">
+
+  
+  <meta name="description" content="I recently landed a change in WebRender to draw CSS box shadows using a specialized shader. Because it&#8217;s an unusual approach to drawing shadows &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://pcwalton.github.com/blog/2015/12/21/drawing-css-box-shadows-in-webrender">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <link href="/atom.xml" rel="alternate" title="pcwalton" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=AM_HTMLorMML"></script>
+<script>
+MathJax.Hub.Config({
+  asciimath2jax: {
+    delimiters: [['$$','$$']],
+    skipTags: ['script', 'noscript', 'style', 'textarea']
+  }
+});
+</script>
+
+
+  
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">pcwalton</a></h1>
+  
+    <h2>Occasional notes on Rust, Firefox, etc.</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:pcwalton.github.com" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Drawing CSS Box Shadows in WebRender</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-12-21T11:08:00-08:00" pubdate data-updated="true">Dec 21<span>st</span>, 2015</time>
+        
+         | <a href="#disqus_thread">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>I recently landed a <a href="https://github.com/glennw/webrender/commit/d57057470cb2bddf0c8ece3fc29cfbe5d03114a2">change</a> in WebRender to draw <a href="https://developer.mozilla.org/en-US/docs/Web/CSS/box-shadow">CSS box shadows</a> using a specialized shader. Because it&#8217;s an unusual approach to drawing shadows, I thought I&#8217;d write up how it works.</p>
+
+<p>Traditionally, browsers have drawn box shadows <a href="https://dxr.mozilla.org/mozilla-central/source/gfx/thebes/gfxBlur.cpp#624">in three passes</a>: (1) draw the unblurred box (or a nine-patch corner/edge for one); (2) blur in the horizontal direction; (3) blur in the vertical direction. This works because a Gaussian blur is a <a href="https://en.wikipedia.org/wiki/Separable_filter">separable filter</a>: it can be computed as the product of two one-dimensional convolutions. This is a reasonable approach, but it has downsides. First of all, it has a high cost in memory bandwidth; for a standard triple box blur on the CPU, every pixel is touched 6 times, and on the GPU every pixel is touched <code>$$6 sigma$$</code> times (or <code>$$3 sigma$$</code> times if a common linear interpolation trick is used), not counting the time needed to draw the unblurred image in the first place. (<code>$$sigma$$</code> here is <a href="http://dbaron.org/log/20110225-blur-radius">half the specified blur radius</a>.) Second, the painting of each box shadow requires no fewer than three draw calls including (usually) one shader switch, which are expensive, especially on mobile GPUs. On the GPU, it&#8217;s often desirable to use parallel algorithms that reduce the number of draw calls and state changes, even if those algorithms have a large number of raw floating-point operations—simply because the GPU is a stream processor that&#8217;s designed for such workloads.</p>
+
+<p>The key trick used in WebRender is to take advantage of the fact that we&#8217;re blurring a (potentially rounded) <em>box</em>, not an ordinary image. This allows us to express the Gaussian blur in (in the case of an unrounded box) a closed form and (in the case of a rounded box) a closed form minus a sum computed with a small loop. To draw a box shadow, WebRender runs a shader implementing this logic and caches the results in a nine-patch image mask stored in a texture atlas. If the page contains multiple box shadows (even those with heterogeneous sizes and radii), the engine batches all the invocations of this shader into one draw call. This means that, no matter how many box shadows are in use, the number of draw calls and state changes remains constant (as long as the size of the texture atlas isn&#8217;t exhausted). Driver overhead and memory bandwidth are minimized, and the GPU spends as much time as possible in raw floating-point computation, which is exactly the kind of workload it&#8217;s optimized for.</p>
+
+<p>The remainder of this post will be a dive into the logic of the fragment shader itself. The <a href="https://github.com/glennw/webrender/blob/d57057470cb2bddf0c8ece3fc29cfbe5d03114a2/res/box_shadow.fs.glsl">source code</a> may be useful as a reference.</p>
+
+<p>For those unfamiliar with OpenGL, per-pixel logic is expressed with a <em>fragment shader</em> (sometimes called a <em>pixel shader</em>). A fragment shader (in this case) is conceptually a function that maps arbitrary per-pixel input data to the RGB values defining the resulting color for that pixel. In our case, the input data for each pixel simply consists of the <code>$$x$$</code> and <code>$$y$$</code> coordinates for that pixel. We&#8217;ll call our function <code>$$RGB(u,v)$$</code> and define it as follows:</p>
+
+<pre><code>$$RGB(u,v) = sum_{y=-oo}^{oo} sum_{x=-oo}^{oo}G(x-u)G(y-v)RGB_{"rounded box"}(x,y)$$
+</code></pre>
+
+<p>Here, <code>$$RGB_{"rounded box"}(x,y)$$</code> is the color of the unblurred, possibly-rounded box at the coordinate <code>$$(x,y)$$</code>, and <code>$$G(x)$$</code> is the Gaussian function used for the blur:</p>
+
+<pre><code>$$G(x)=1/sqrt(2 pi sigma^2) e^(-x^2/(2 sigma^2))$$
+</code></pre>
+
+<p>A Gaussian blur in one dimension is a convolution that maps each input pixel to an average of the pixels adjacent to it weighted by <code>$$G(x)$$</code>, where <code>$$x$$</code> is the distance from the output pixel. A two-dimensional Gaussian blur is simply the product of two one-dimensional Gaussian blurs, one for each dimension. This definition leads to the formula for <code>$$RGB(x,y)$$</code> above.</p>
+
+<p>Since CSS box shadows blur solid color boxes, the color of each pixel is either the color of the shadow (call it <code>$$RGB_{"box"}$$</code>) or transparent. We can rewrite this into two functions:</p>
+
+<pre><code>$$RGB(x,y) = RGB_{"box"}C(x,y)$$
+</code></pre>
+
+<p>and</p>
+
+<pre><code>$$C(u,v) = sum_{y=-oo}^{oo} sum_{x=-oo}^{oo}G(x-u)G(y-v)C_{"rounded box"}(x,y)$$
+</code></pre>
+
+<p>where <code>$$C_{"rounded box"}(x,y)$$</code> is 1.0 if the point $$(x,y)$$ is inside the unblurred, possibly-rounded box and 0.0 otherwise.</p>
+
+<p>Now let&#8217;s start with the simple case, in which the box is unrounded. We&#8217;ll call this function <code>$$C_{"blurred box"}$$</code>:</p>
+
+<pre><code>$$C_{"blurred box"}(u,v) = sum_{y=-oo}^{oo} sum_{x=-oo}^{oo}G(x-u)G(y-v)C_{"box"}(x,y)$$
+</code></pre>
+
+<p>where <code>$$C_{"box"}(x,y)$$</code> is 1.0 if the point $$(x,y)$$ is inside the box and 0.0 otherwise.</p>
+
+<p>Let <code>$$x_{"min"}, x_{"max"}, y_{"min"}, y_{"max"}$$</code> be the left, right, top, and bottom extents of the box respectively. Then <code>$$C_{"box"}(x,y)$$</code> is 1.0 if <code>$$x_{"min"} &lt;= x &lt;= x_{"max"}$$</code> and <code>$$y_{"min"} &lt;= y &lt;= y_{"max"}$$</code> and 0.0 otherwise. Now let&#8217;s rearrange <code>$$C_{"blurred box"}(x,y)$$</code> above:</p>
+
+<pre><code>$$C_{"blurred box"}(u,v) =
+    (sum_{y=-oo}^{y_{"min"} - 1}
+        sum_{x=-oo}^{x=oo} G(x-u)G(y-v)C_{"box"}(x,y)) +
+    (sum_{y=y_{"min"}}^{y_{"max"}}
+        (sum_{x=-oo}^{x_{"min"}-1} G(x-u)G(y-v)C_{"box"}(x,y)) +
+        (sum_{x=x_{"min"}}^{x_{"max"}} G(x-u)G(y-v)C_{"box"}(x,y)) +
+        (sum_{x=x_{"max"}+1}^{x=oo} G(x-u)G(y-v)C_{"box"}(x,y))) +
+    (sum_{y=y_{"max"} + 1}^{oo}
+        sum_{x=-oo}^{x=oo} G(x)G(y)C_{"box"}(x,y))$$
+</code></pre>
+
+<p>We can now eliminate several of the intermediate sums, along with <code>$$C_{"box"}(x,y)$$</code>, using its definition and the sum bounds:</p>
+
+<pre><code>$$C_{"blurred box"}(u,v) = sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}} G(x-u)G(y-v)$$
+</code></pre>
+
+<p>Now let&#8217;s simplify this expression to a closed form. To begin with, we&#8217;ll approximate the sums with integrals:</p>
+
+<pre><code>$$C_{"blurred box"}(u,v) ~~ int_{y_{"min"}}^{y_{"max"}} int_{x_{"min"}}^{x_{"max"}} G(x-u)G(y-v) dxdy$$
+
+$$= int_{y_{"min"}}^{y_{"max"}} G(y-v) int_{x_{"min"}}^{x_{"max"}} G(x-u) dxdy$$
+</code></pre>
+
+<p>Now the inner integral can be evaluated to a closed form:</p>
+
+<pre><code>$$int_{x_{"min"}}^{x_{"max"}}G(x-u)dx
+    = int_{x_{"min"}}^{x_{"max"}}1/sqrt(2 pi sigma^2) e^(-(x-u)^2/(2 sigma^2))dx
+    = 1/2 "erf"((x_{"max"}-u)/(sigma sqrt(2))) - 1/2 "erf"((x_{"min"}-u)/(sigma sqrt(2)))$$
+</code></pre>
+
+<p><code>$$"erf"(x)$$</code> here is the <a href="https://en.wikipedia.org/wiki/Error_function">Gauss error function</a>. It is not found in GLSL (though it is found in <code>&lt;math.h&gt;</code>), but it does have the following <a href="https://en.wikipedia.org/wiki/Error_function#Approximation_with_elementary_functions">approximation</a> suitable for evaluation on the GPU:</p>
+
+<pre><code>$$"erf"(x) ~~ 1 - 1/((1+a_1x + a_2x^2 + a_3x^3 + a_4x^4)^4)$$
+</code></pre>
+
+<p>where <code>$$a_1$$</code> = 0.278393, <code>$$a_2$$</code> = 0.230389, <code>$$a_3$$</code> = 0.000972, and <code>$$a_4$$</code> = 0.078108.</p>
+
+<p>Now let&#8217;s finish simplifying <code>$$C(u,v)$$</code>:</p>
+
+<pre><code>$$C_{"blurred box"}(u,v) ~~
+    int_{y_{"min"}}^{y_{"max"}} G(y-v) int_{x_{"min"}}^{x_{"max"}} G(x-u) dxdy$$
+
+$$= int_{y_{"min"}}^{y_{"max"}} G(y-v)
+    (1/2 "erf"((x_{"max"}-u)/(sigma sqrt(2))) - 1/2 "erf"((x_{"min"}-u)/(sigma sqrt(2)))) dy$$
+
+$$= 1/2 "erf"((x_{"max"}-u)/(sigma sqrt(2))) - 1/2 "erf"((x_{"min"}-u)/(sigma sqrt(2)))
+    int_{y_{"min"}-v}^{y_{"max"}} G(y-v) dy$$
+
+$$= 1/4 ("erf"((x_{"max"}-u)/(sigma sqrt(2))) - "erf"((x_{"min"}-u)/(sigma sqrt(2))))
+        ("erf"((y_{"max"}-v)/(sigma sqrt(2))) - "erf"((y_{"min"}-v)/(sigma sqrt(2))))$$
+</code></pre>
+
+<p>And this gives us our closed form formula for the color of the blurred box.</p>
+
+<p>Now for the real meat of the shader: the handling of nonzero border radii. CSS allows boxes to have <em>elliptical radii</em> in the corners, with separately defined major axis and minor axis lengths. Each corner can have separately defined radii; for simplicity, we only consider boxes with identical radii on all corners in this writeup, although the technique readily generalizes to heterogeneous radii. Most border radii on the Web are circular and homogeneous, but to handle CSS properly our shader needs to support elliptical heterogeneous radii in their full generality.</p>
+
+<p>As before, the basic function to compute the pixel color looks like this:</p>
+
+<pre><code>$$C(u,v) = sum_{y=-oo}^{oo} sum_{x=-oo}^{oo}G(x-u)G(y-v)C_{"rounded box"}(x,y)$$
+</code></pre>
+
+<p>where <code>$$C_{"rounded box"}(x,y)$$</code> is 1.0 if the point $$(x,y)$$ is inside the box (now with rounded corners) and 0.0 otherwise.</p>
+
+<p>Adding some bounds to the sums gives us:</p>
+
+<pre><code>$$C(u,v) = sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}} G(x-u)G(y-v)
+    C_{"rounded box"}(x,y)$$
+</code></pre>
+
+<p><code>$$C_{"rounded box"}(x,y)$$</code> is 1.0 if <code>$$C_{"box"}(x,y)$$</code> is 1.0—i.e. if the point <code>$$(x,y)$$</code> is inside the unrounded box—<em>and</em> the point is either inside the ellipse defined by the value of the <code>border-radius</code> property or outside the border corners entirely. Let <code>$$C_{"inside corners"}(x,y)$$</code> be 1.0 if this latter condition holds and 0.0 otherwise—i.e. 1.0 if the point <code>$$(x,y)$$</code> is inside the ellipse defined by the corners or completely outside the corner area. Graphically, <code>$$C_{"inside corners"}(x,y)$$</code> looks like a blurry version of this:</p>
+
+<div style="margin: 0 auto 1em; width: 300px; height: 200px; background: black; position: relative;">
+    <div style="top: 25px; left: 25px; width: 250px; height: 150px; background: white; position: absolute;">
+        <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: black; border-radius: 25px;"></div>
+    </div>
+</div>
+
+
+<p>Then, because <code>$$C_{"box"}(x,y)$$</code> is always 1.0 within the sum bounds, <code>$$C_{"rounded box"}(x,y)$$</code> reduces to <code>$$C_{"inside corners"}(x,y)$$</code>:</p>
+
+<pre><code>$$C(u,v) = sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}} G(x-u)G(y-v)
+    C_{"inside corners"}(x,y)$$
+</code></pre>
+
+<p>Now let <code>$$C_{"outside corners"}(x,y)$$</code> be the inverse of <code>$$C_{"inside corners"}(x,y)$$</code>—i.e. <code>$$C_{"outside corners"}(x,y) = 1.0 - C_{"inside corners"}(x,y)$$</code>. Intuitively, <code>$$C_{"outside corners"}(x,y)$$</code> is 1.0 if <code>$$(x,y)$$</code> is <em>inside</em> the box but <em>outside</em> the rounded corners—graphically, it looks like one <span style="display: inline-block; position: relative; width: 1em; height: 1em; overflow: hidden;"><span style="display: block; position: absolute; border-radius: 100%; width: 200%; height: 200%; top: -100%; left: -100%; border: solid black 1em;"></span></span> shape for each corner. With this, we can rearrange the formula above:</p>
+
+<pre><code>$$C(u,v) = sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}} G(x-u)G(y-v)
+    (1.0 - C_{"outside corners"}(x,y))$$
+
+$$= sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}} G(x-u)G(y-v) -
+    G(x-u)G(y-v)C_{"outside corners"}(x,y)$$
+
+$$= (sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}} G(x-u)G(y-v)) -
+    sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}}
+        G(x-u)G(y-v)C_{"outside corners"}(x,y)$$
+
+$$= C_{"blurred box"}(u,v) -
+    sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}}
+        G(x-u)G(y-v)C_{"outside corners"}(x,y)$$
+</code></pre>
+
+<p>We&#8217;ve now arrived at our basic strategy for handling border corners: compute the color of the blurred unrounded box, then &#8220;cut out&#8221; the blurred border corners by subtracting their color values. We already have a closed form formula for <code>$$C_{"blurred box"}(x,y)$$</code>, so let&#8217;s focus on the second term. We&#8217;ll call it <code>$$C_{"blurred outside corners"}(x,y)$$</code>:</p>
+
+<pre><code>$$C_{"blurred outside corners"}(u,v) = sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}}
+        G(x-u)G(y-v)C_{"outside corners"}(x,y)$$
+</code></pre>
+
+<p>Let&#8217;s subdivide <code>$$C_{"outside corners"}(x,y)$$</code> into the four corners: top left, top right, bottom right, and bottom left. This is valid because every point belongs to at most one of the corners per the CSS specification—corners cannot overlap.</p>
+
+<pre><code>$$C_{"blurred outside corners"}(u,v) = sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}}
+        G(x-u)G(y-v)(C_{"outside TL corner"}(x,y) + C_{"outside TR corner"}(x,y)
+        + C_{"outside BR corner"}(x,y) + C_{"outside BL corner"}(x,y))$$
+
+$$= (sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}}
+        G(x-u)G(y-v)(C_{"outside TL corner"}(x,y) + C_{"outside TR corner"}(x,y))) +
+        sum_{y=y_{"min"}}^{y_{"max"}} sum_{x=x_{"min"}}^{x_{"max"}}
+            G(x-u)G(y-v)(C_{"outside BR corner"}(x,y) + C_{"outside BL corner"}(x,y))$$
+
+$$= (sum_{y=y_{"min"}}^{y_{"max"}} G(y-v)
+    ((sum_{x=x_{"min"}}^{x_{"max"}} G(x-u)C_{"outside TL corner"}(x,y)) +
+    sum_{x=x_{"min"}}^{x_{"max"}} G(x-u) C_{"outside TR corner"}(x,y))) +
+    sum_{y=y_{"min"}}^{y_{"max"}} G(y-v)
+            ((sum_{x=x_{"min"}}^{x_{"max"}} G(x-u)C_{"outside BL corner"}(x,y)) +
+            sum_{x=x_{"min"}}^{x_{"max"}} G(x-u)C_{"outside BR corner"}(x,y))$$
+</code></pre>
+
+<p>Let <code>$$a$$</code> and <code>$$b$$</code> be the horizontal and vertical border radii, respectively. The vertical boundaries of the top left and top right corners are defined by <code>$$y_min$$</code> on the top and <code>$$y_min + b$$</code> on the bottom; <code>$$C_{"outside TL corner"}(x,y)$$</code> and <code>$$C_{"outside TR corner"}(x,y)$$</code> will evaluate to 0 if <code>$$y$$</code> lies outside this range. Likewise, the vertical boundaries of the bottom left and bottom right corners are <code>$$y_max - b$$</code> and <code>$$y_max$$</code>.</p>
+
+<p>(Note, again, that we assume all corners have equal border radii. The following simplification depends on this, but the overall approach doesn&#8217;t change.)</p>
+
+<p>Armed with this simplification, we can adjust the vertical bounds of the sums in our formula:</p>
+
+<pre><code>$$C_{"blurred outside corners"}(u,v) =
+    (sum_{y=y_{"min"}}^{y_{"min"} + b} G(y-v)
+        ((sum_{x=x_{"min"}}^{x_{"max"}} G(x-u)C_{"outside TL corner"}(x,y)) +
+        sum_{x=x_{"min"}}^{x_{"max"}} G(x-u) C_{"outside TR corner"}(x,y))) +
+    sum_{y=y_{"max"} - b}^{y_{"max"}} G(y-v)
+            ((sum_{x=x_{"min"}}^{x_{"max"}} G(x-u)C_{"outside BL corner"}(x,y)) +
+            sum_{x=x_{"min"}}^{x_{"max"}} G(x-u)C_{"outside BR corner"}(x,y))$$
+</code></pre>
+
+<p>And, following similar logic, we can adjust their horizontal bounds:</p>
+
+<pre><code>$$C_{"blurred outside corners"}(u,v) =
+    (sum_{y=y_{"min"}}^{y_{"min"} + b} G(y-v)
+        ((sum_{x=x_{"min"}}^{x_{"min"} + a} G(x-u)C_{"outside TL corner"}(x,y)) +
+        sum_{x=x_{"max"} - a}^{x_{"max"}} G(x-u) C_{"outside TR corner"}(x,y))) +
+    sum_{y=y_{"max"} - b}^{y_{"max"}} G(y-v)
+            ((sum_{x=x_{"min"}}^{x_{"min"} + a} G(x-u)C_{"outside BL corner"}(x,y)) +
+            sum_{x=x_{"max"} - a}^{x_{"max"}} G(x-u)C_{"outside BR corner"}(x,y))$$
+</code></pre>
+
+<p>At this point, we can work on eliminating all of the <code>$$C_{"outside corner"}$$</code> functions from our expression. Let&#8217;s look at the definition of <code>$$C_{"outside TR corner"}(x,y)$$</code>. <code>$$C_{"outside TR corner"}(x,y)$$</code> is 1.0 if the point <code>$$(x,y)$$</code> is inside the rectangle formed by the border corner but outside the ellipse that defines that corner. That is, <code>$$C_{"outside TR corner"}(x,y)$$</code> is 1.0 if <code>$$y_{"min"} &lt;= y &lt;= y_{"min"} + b$$</code> and <code>$$E_{"TR"}(y) &lt;= x &lt;= x_{"max"}$$</code>, where <code>$$E_{"TR"}(y)$$</code> defines the horizontal position of the point on the ellipse with the given <code>$$y$$</code> coordinate. <code>$$E_{"TR"}(y)$$</code> can easily be derived from the equation of an ellipse centered at `$$(x_0, y_0)$$:</p>
+
+<pre><code>$$(x-x_0)^2/a^2 + (y-y_0)^2/b^2 = 1$$
+
+$$(x-x_0)^2 = a^2(1 - (y-y_0)^2/b^2)$$
+
+$$x = x_0 + sqrt(a^2(1 - (y-y_0)^2/b^2))$$
+
+$$E_{"TR"}(y) = x_0 + a sqrt(1 - ((y-y_0)/b)^2)$$
+</code></pre>
+
+<p>Parallel reasoning applies to the other corners.</p>
+
+<p>Now that we have bounds within which each <code>$$C_{"outside corner"}$$</code> function evaluates to 1.0, we can eliminate all of these functions from the definition of <code>$$C_{"blurred outside corners"}$$</code>:</p>
+
+<pre><code>$$C_{"blurred outside corners"}(u,v) =
+    (sum_{y=y_{"min"}}^{y_{"min"} + b} G(y-v)
+        ((sum_{x=x_{"min"}}^{E_{"TL"}(y)} G(x-u)) +
+        sum_{x=E_{"TR"}(y)}^{x_{"max"}} G(x-u))) +
+    sum_{y=y_{"max"} - b}^{y_{"max"}} G(y-v)
+            ((sum_{x=x_{"min"}}^{E_{"BL"}(y)} G(x-u)) +
+            sum_{x=E_{"BR"}(y)}^{x_{"max"}} G(x-u))$$
+</code></pre>
+
+<p>To simplify this a bit further, let&#8217;s define an intermediate function:</p>
+
+<pre><code>$$E(y, y_0) = a sqrt(1 - ((y - y_0)/b)^2)$$
+</code></pre>
+
+<p>And rewrite <code>$$C_{"blurred outside corners"}(x,y)$$</code> as follows:</p>
+
+<pre><code>$$C_{"blurred outside corners"}(u,v) =
+    (sum_{y=y_{"min"}}^{y_{"min"} + b} G(y-v)
+        ((sum_{x=x_{"min"}}^{x_{"min"} + a - E(y, y_{"min"} + b)} G(x-u)) +
+        sum_{x=x_{"max"} - a + E(y, y_{"min"} + b)}^{x_{"max"}} G(x-u))) +
+    (sum_{y=y_{"max" - b}}^{y_{"max"}} G(y-v)
+        ((sum_{x=x_{"min"}}^{x_{"min"} + a - E(y, y_{"max"} - b)} G(x-u)) +
+        sum_{x=x_{"max"} - a + E(y, y_{"max"} - b)}^{x_{"max"}} G(x-u)))$$
+</code></pre>
+
+<p>Now we simply follow the procedure we did before for the box. Approximate the inner sums with integrals:</p>
+
+<pre><code>$$C_{"blurred outside corners"}(u,v) ~~
+    (sum_{y=y_{"min"}}^{y_{"min"} + b} G(y-v)
+        ((int_{x_{"min"}}^{x_{"min"} + a - E(y, y_{"min"} + b)} G(x-u)dx) +
+        int_{x_{"max"} - a + E(y, y_{"min"} + b)}^{x_{"max"}} G(x-u)dx)) +
+    (sum_{y=y_{"max" - b}}^{y_{"max"}} G(y-v)
+        ((int_{x_{"min"}}^{x_{"min"} + a - E(y, y_{"max"} - b)} G(x-u)dx) +
+        int_{x_{"max"} - a + E(y, y_{"max"} - b)}^{x_{"max"}} G(x-u)dx))$$
+</code></pre>
+
+<p>Replace <code>$$int G(x)dx$$</code> with its closed-form solution:</p>
+
+<pre><code>$$C_{"blurred outside corners"}(u,v) ~~
+    (sum_{y=y_{"min"}}^{y_{"min"} + b} G(y-v)
+        (1/2 "erf"((x_{"min"} - u + a - E(y, y_{"min"} - v + b)) / (sigma sqrt(2))) -
+         1/2 "erf"((x_{"min"} - u) / (sigma sqrt(2))) +
+         (1/2 "erf"((x_{"max"} - u) / (sigma sqrt(2))) -
+          1/2 "erf"((x_{"max"} - u - a + E(y, y_{"min"} - v + b)) / (sigma sqrt(2)))))) +
+     sum_{y=y_{"max"} - b}^{y_{"max"}} G(y-v)
+                (1/2 "erf"((x_{"min"} - u + a - E(y, y_{"max"} - v - b)) / (sigma sqrt(2))) -
+                 1/2 "erf"((x_{"min"} - u) / (sigma sqrt(2))) +
+                 (1/2 "erf"((x_{"max"} - u) / (sigma sqrt(2))) -
+                  1/2 "erf"((x_{"max"} - u - a + E(y, y_{"max"} - v - b)) / (sigma sqrt(2)))))$$
+
+$$= 1/2 (sum_{y=y_{"min"}}^{y_{"min"} + b} G(y-v)
+        ("erf"((x_{"min"} - u + a - E(y, y_{"min"} - v + b)) / (sigma sqrt(2))) -
+         "erf"((x_{"min"} - u) / (sigma sqrt(2))) +
+         ("erf"((x_{"max"} - u) / (sigma sqrt(2))) -
+          "erf"((x_{"max"} - u - a + E(y, y_{"min"} - v + b)) / (sigma sqrt(2)))))) +
+     sum_{y=y_{"max"} - b}^{y_{"max"}} G(y-v)
+                ("erf"((x_{"min"} - u + a - E(y, y_{"max"} - v - b)) / (sigma sqrt(2))) -
+                 "erf"((x_{"min"} - u) / (sigma sqrt(2))) +
+                 ("erf"((x_{"max"} - u) / (sigma sqrt(2))) -
+                  "erf"((x_{"max"} - u - a + E(y, y_{"max"} - v - b)) / (sigma sqrt(2)))))$$
+</code></pre>
+
+<p>And we&#8217;re done! Unfortunately, this is as far as we can go with standard mathematical functions. Because the parameters to the error function depend on <code>$$y$$</code>, we have no choice but to evaluate the inner sum numerically. Still, this only results in <a href="https://github.com/glennw/webrender/blob/d57057470cb2bddf0c8ece3fc29cfbe5d03114a2/res/box_shadow.fs.glsl#L86">one loop in the shader</a>.</p>
+
+<p>The <a href="https://github.com/glennw/webrender/blob/d57057470cb2bddf0c8ece3fc29cfbe5d03114a2/res/box_shadow.fs.glsl">current version of the shader</a> implements the algorithm basically as described here. There are several further improvements that could be made:</p>
+
+<ol>
+<li><p>The Gauss error function approximation that we use is accurate to <code>$$5 xx 10^-4$$</code>, which is way more accurate than we need. (Remember that the units here are 8-bit color values!) The approximation involves computing <code>$$x, x^2, x^3, " and " x^4$$</code>, which is expensive since we evaluate the error function many times for each pixel. It could be a nice speedup to replace this with a less accurate, faster approximation. Or we could use a lookup table.</p></li>
+<li><p>We should not even compute the amount to subtract from the corners if the pixel in question is more than <code>$$3 sigma$$</code> pixels away from them.</p></li>
+<li><p><code>$$C_{"blurred outside corners"}(x,y)$$</code> is a function of sigmoid shape. It might be interesting to try approximating it with a logistic function to avoid the loop in the shader. It might be possible to do this with a few iterations of least squares curve fitting on the CPU or with some sort of lookup table. Unfortunately, the parameters to the approximation will have to be per-box-shadow, because <code>$$C_{"blurred outside corners"}$$</code> depends on <code>$$a$$</code>, <code>$$b$$</code>, <code>$${x, y}_{"min, max"}$$</code>, and <code>$$sigma$$</code>.</p></li>
+<li><p>Evaluating <code>$$G(x)$$</code> could also be done with a lookup table. There is already <a href="https://github.com/glennw/webrender/issues/66">a GitHub issue</a> filed on this.</p></li>
+</ol>
+
+
+<p>Finally, it would obviously be nice to perform some comprehensive benchmarks of this rendering algorithm, fully optimized, against the standard multiple-pass approach to drawing box shadows. In general, WebRender is not at all GPU bound on most hardware (like most accelerated GPU vector graphics rasterizers), so optimizing the count of GPU raster operations has not been a priority so far. When and if this changes (which I suspect it will as the rendering pipeline gets more and more optimized), it may be worth going back and optimizing the shader to reduce the load on the ALU. For now, however, this technique seems to perform quite well in basic testing, and since WebRender is so CPU bound it seems likely to me that the reduction in draw calls and state changes will make this technique worth the cost.</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Patrick Walton</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-12-21T11:08:00-08:00" pubdate data-updated="true">Dec 21<span>st</span>, 2015</time>
+      
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://pcwalton.github.com/blog/2015/12/21/drawing-css-box-shadows-in-webrender/" data-via="" data-counturl="http://pcwalton.github.com/blog/2015/12/21/drawing-css-box-shadows-in-webrender/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2014/02/25/revamped-parallel-layout-in-servo/" title="Previous Post: Revamped Parallel Layout in Servo">&laquo; Revamped Parallel Layout in Servo</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2017/02/14/pathfinder/" title="Next Post: Pathfinder, a fast GPU-based font rasterizer in Rust">Pathfinder, a fast GPU-based font rasterizer in Rust &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2017/02/14/pathfinder/">Pathfinder, a fast GPU-based font rasterizer in Rust</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/12/21/drawing-css-box-shadows-in-webrender/">Drawing CSS Box Shadows in WebRender</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/02/25/revamped-parallel-layout-in-servo/">Revamped Parallel Layout in Servo</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/06/02/removing-garbage-collection-from-the-rust-language/">Removing Garbage Collection From the Rust Language</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/05/20/safe-manual-memory-management/">Safe Manual Memory Management</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2017 - Patrick Walton -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'pcwalton';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://pcwalton.github.com/blog/2015/12/21/drawing-css-box-shadows-in-webrender/';
+        var disqus_url = 'http://pcwalton.github.com/blog/2015/12/21/drawing-css-box-shadows-in-webrender/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

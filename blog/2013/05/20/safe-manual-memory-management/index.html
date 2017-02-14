@@ -1,0 +1,272 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Safe Manual Memory Management - pcwalton</title>
+  <meta name="author" content="Patrick Walton">
+
+  
+  <meta name="description" content="If there&#8217;s one feature of Rust that is probably the most unique among languages in industry, it&#8217;s safe manual memory management. It&#8217 &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://pcwalton.github.com/blog/2013/05/20/safe-manual-memory-management">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="/javascripts/ender.js"></script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <link href="/atom.xml" rel="alternate" title="pcwalton" type="application/atom+xml">
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=AM_HTMLorMML"></script>
+<script>
+MathJax.Hub.Config({
+  asciimath2jax: {
+    delimiters: [['$$','$$']],
+    skipTags: ['script', 'noscript', 'style', 'textarea']
+  }
+});
+</script>
+
+
+  
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">pcwalton</a></h1>
+  
+    <h2>Occasional notes on Rust, Firefox, etc.</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:pcwalton.github.com" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Safe Manual Memory Management</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2013-05-20T20:46:00-07:00" pubdate data-updated="true">May 20<span>th</span>, 2013</time>
+        
+         | <a href="#disqus_thread">Comments</a>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>If there&#8217;s one feature of Rust that is probably the most unique among languages in industry, it&#8217;s <em>safe manual memory management</em>.</p>
+
+<p>It&#8217;s easiest to explain safe manual memory management by explaining how it differs from the memory models of other languages. There are a few different models in common use in industry languages:</p>
+
+<ul>
+<li><p><em>Unsafe manual memory management</em>—These languages provide very fine-grained control over memory allocation; heap memory can be explicitly allocated and deallocated. The most important examples here are C and C++. The well-known downside of this approach is that memory safety violations can only be detected at runtime with a memory safety checker such as Valgrind or Address Sanitizer. Memory safety violations that go unchecked can lead to crashes at best and exploitable security vulnerabilities at worst.</p></li>
+<li><p><em>Full garbage collection</em>—The majority of modern languages expose a memory model that falls into this category—the space is very diverse, ranging from Java to Go to JavaScript to Ruby to Haskell. In general, such languages place all allocations into the heap instead of the stack, although escape analysis and value types may be used to reduce the number of heap allocations. Periodically, a <em>garbage collector</em> scans all pointers on the stack and in the heap, judges unreachable objects dead, and reclaims them. This approach has the advantage of <em>memory safety</em> at compile time—the language arranges for there to be no dangling pointers, wild pointers, and so forth. The downsides, however, are:</p>
+
+<ol>
+<li><p>The garbage collector may run at an inconvenient time. This can be mitigated by explicit control over when the GC runs, although if the garbage collector must collect multiple threads&#8217; heaps at the same time, this may be difficult to synchronize. This can also be mitigated by using manual memory pooling and free lists, although pooling has undesirable safety properties—much like unsafe manual memory management, there is no static guarantee that objects allocated from a pool are returned properly or that an object is not reachable when returned to the pool. Incremental and concurrent garbage collectors help here, but they are not free, as they typically require write and/or read barriers, reducing throughput.</p></li>
+<li><p>When it runs, the garbage collector must mark all pointers to discover which ones are live, reducing throughput of the application. Essentially, the GC must discover at <em>runtime</em> what a C++ (say) programmer knows at <em>compile time</em>. Not much can typically be done about this cost in fully garbage-collected languages, short of falling back to unsafe manual memory management. Pools don&#8217;t help much here, because the GC must still trace the pointers into the pool. Even pointers into the stack generally must be traced.</p></li>
+</ol>
+</li>
+<li><p><em>Garbage collection with value types and references</em>—This category includes languages like C#. (I believe D falls into this category as well, although I may be mistaken.) These languages are essentially garbage-collected, but they include <em>value types</em> which are guaranteed to be stack-allocated if in local variables. Additionally, and most importantly, they include <em>reference parameters</em> (and sometimes reference locals), which allow stack-allocated values to be temporarily aliased when calling another function. Effective use of value types can reduce marking and sweeping time. In general, this system is an effective addition to a garbage-collected system, allowing a good measure of additional control without much cost in complexity and no cost in memory safety. It is not, however, typically sufficient to write programs without using the garbage collector at all; the system is too simple to statically encode anything other than the most basic memory management patterns.</p></li>
+</ul>
+
+
+<p>Where does Rust fit in? Actually, it fits into a category all to itself among industry languages (although one shared by various research languages, like Cyclone). Rust offers <em>safe manual memory management</em> (although some have objected to the term &#8220;manual&#8221; here). It extends the system described above as &#8220;garbage collection with value types and references&#8221; in two important ways:</p>
+
+<ol>
+<li><p>You can allocate memory that will not be traced by the garbage collector, and free it manually if you choose. This is the feature of Rust known as &#8220;unique pointers&#8221;. Rust will automatically free memory that is uniquely owned when its owning pointer goes out of scope. It&#8217;s also easy to write a function that acts exactly as <code>free</code> does, so you can precisely choose when your objects die. Unique pointers are not traced by the GC (unless they point to a type that transitively contains a garbage-collected pointer), so they are an effective way to cut down marking times.</p></li>
+<li><p>You can <em>return references</em> and <em>place references into data structures</em>. Like other references, these references are not traced by the garbage collector. As long as the references follow a <em>stack discipline</em>, meaning that they point to memory that was allocated by one of the callers of the current function, the compiler allows them to be placed anywhere. This adds a great deal of expressiveness over the reference parameter approach, and it enables a large number of programs to be written without using the garbage collector at all.</p></li>
+</ol>
+
+
+<p>In terms of safety and performance, safe manual memory management is having your cake and eating it too. You get memory safety like a garbage-collected language, but control like that of unsafe manual memory management. But this system has its downsides as well—most importantly, complexity of implementation and interface. Learning to use references and unique pointers poses a significant learning curve. But, once the system is learned, it&#8217;s remarkably flexible, with an attractive combination of performance and safety.</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">Patrick Walton</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2013-05-20T20:46:00-07:00" pubdate data-updated="true">May 20<span>th</span>, 2013</time>
+      
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://pcwalton.github.com/blog/2013/05/20/safe-manual-memory-management/" data-via="" data-counturl="http://pcwalton.github.com/blog/2013/05/20/safe-manual-memory-management/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2013/04/18/performance-of-sequential-rust-programs/" title="Previous Post: Performance of Sequential Rust Programs">&laquo; Performance of Sequential Rust Programs</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2013/06/02/removing-garbage-collection-from-the-rust-language/" title="Next Post: Removing Garbage Collection From the Rust Language">Removing Garbage Collection From the Rust Language &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+  <section>
+    <h1>Comments</h1>
+    <div id="disqus_thread" aria-live="polite"><noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+</div>
+  </section>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2017/02/14/pathfinder/">Pathfinder, a fast GPU-based font rasterizer in Rust</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/12/21/drawing-css-box-shadows-in-webrender/">Drawing CSS Box Shadows in WebRender</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/02/25/revamped-parallel-layout-in-servo/">Revamped Parallel Layout in Servo</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/06/02/removing-garbage-collection-from-the-rust-language/">Removing Garbage Collection From the Rust Language</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/05/20/safe-manual-memory-management/">Safe Manual Memory Management</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2017 - Patrick Walton -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+<script type="text/javascript">
+      var disqus_shortname = 'pcwalton';
+      
+        
+        // var disqus_developer = 1;
+        var disqus_identifier = 'http://pcwalton.github.com/blog/2013/05/20/safe-manual-memory-management/';
+        var disqus_url = 'http://pcwalton.github.com/blog/2013/05/20/safe-manual-memory-management/';
+        var disqus_script = 'embed.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = 'http://platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>
