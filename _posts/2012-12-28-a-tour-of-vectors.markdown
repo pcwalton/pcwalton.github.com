@@ -98,11 +98,11 @@ The entire contents of the vector were copied into a new allocation. This is, as
 
 This covers the three main vector representations in use by most languages. They're fairly standard and representative; if I didn't mention a language here, it's likely that its implementation uses one of these three techniques. It's important to note that none of these are right or wrong per se—they all have advantages and disadvantages. In a future post, I'll explain the way Rust's vector model allows the programmer to choose the model appropriate for the task at hand.
 
-[java-vector]: http://i.imgur.com/zeztF.png
-[java-vector-aliased]: http://i.imgur.com/0t6xB.png
-[python-vector]: http://i.imgur.com/xXjOU.png
-[python-vector-aliased]: http://i.imgur.com/jLJRj.png
-[python-vector-aliased-bigger]: http://i.imgur.com/U0g4w.png
-[cxx-vector]: http://i.imgur.com/dEQG3.png
-[cxx-vector-bigger]: http://i.imgur.com/QYFGV.png
-[cxx-vector-copied]: http://i.imgur.com/KIPIa.png
+[java-vector]: https://i.imgur.com/zeztF.png
+[java-vector-aliased]: https://i.imgur.com/0t6xB.png
+[python-vector]: https://i.imgur.com/xXjOU.png
+[python-vector-aliased]: https://i.imgur.com/jLJRj.png
+[python-vector-aliased-bigger]: https://i.imgur.com/U0g4w.png
+[cxx-vector]: https://i.imgur.com/dEQG3.png
+[cxx-vector-bigger]: https://i.imgur.com/QYFGV.png
+[cxx-vector-copied]: https://i.imgur.com/KIPIa.png

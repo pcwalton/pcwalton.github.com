@@ -72,6 +72,6 @@ Despite the fact that this error is easy to fix, I'm concerned about the fact th
 
 In any case, the take-away from all of this is that the borrow checker should be much easier and more transparent with this change. There's essentially just one straightforward rule to remember.
 
-[iterator invalidation]: http://stackoverflow.com/questions/6438086/iterator-invalidation-rules
-[revamp]: http://smallcultfollowing.com/babysteps/blog/2012/11/18/imagine-never-hearing-the-phrase-aliasable/
+[iterator invalidation]: https://stackoverflow.com/questions/6438086/iterator-invalidation-rules
+[revamp]: https://smallcultfollowing.com/babysteps/blog/2012/11/18/imagine-never-hearing-the-phrase-aliasable/
 [a pull request]: https://github.com/mozilla/rust/pull/4454

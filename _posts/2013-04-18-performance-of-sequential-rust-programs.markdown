@@ -20,7 +20,7 @@ For all these reasons and more, it is important to not read too much into these 
 
 Enough disclaimers; on to the results:
 
-![Results](http://i.imgur.com/Cd3ZBHT.png)
+![Results](https://i.imgur.com/Cd3ZBHT.png)
 
 These programs were tested on a 2.53 GHz Intel Core 2 Duo MacBook Pro with 4 GB of RAM, running Mac OS X 10.6 Snow Leopard. "GCC 4.2" is GCC 4.2.1, Apple build 5666; "clang 1.7" is Apple clang 1.7, based on LLVM 2.9svn; "clang 3.1" is LLVM 3.1, trunk 149587. GCC and clang were run with `-O2`, and Rust was run with `-O` (which is like `-O2`). Three runs were averaged together to produce each result. Results are normalized to GCC 4.2. Lower numbers are better.
 

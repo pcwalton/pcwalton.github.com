@@ -258,18 +258,18 @@ Finally, I'd like to extend a special thanks to Raph Levien for many fruitful di
 ideas. This project wouldn't have been possible without his insight and expertise.
 
 [Pathfinder]: https://github.com/pcwalton/pathfinder
-[`stb_truetype` version 2.0 and up]: http://nothings.org/gamedev/rasterize/
+[`stb_truetype` version 2.0 and up]: https://nothings.org/gamedev/rasterize/
 [`font-rs`]: https://medium.com/@raphlinus/inside-the-fastest-font-renderer-in-the-world-75ae5270c445
 [Raph's description of the algorithm]: https://medium.com/@raphlinus/inside-the-fastest-font-renderer-in-the-world-75ae5270c445
 [Bézier curves]: https://en.wikipedia.org/wiki/B%C3%A9zier_curve
 [Winding rule]: https://en.wikipedia.org/wiki/Nonzero-rule
-[Sean Barrett's description of the `stb_truetype` algorithm]: http://nothings.org/gamedev/rasterize/
+[Sean Barrett's description of the `stb_truetype` algorithm]: https://nothings.org/gamedev/rasterize/
 [prefix sum]: https://en.wikipedia.org/wiki/Prefix_sum
 [post-transform cache]: https://www.khronos.org/opengl/wiki/Post_Transform_Cache
 [compute-shader]: https://github.com/pcwalton/compute-shader
 [CFF2 format]: https://www.microsoft.com/typography/otspec/cff2.htm
 [available on GitHub]: https://github.com/pcwalton/pathfinder
-[Raph Levien]: http://levien.com/
+[Raph Levien]: https://levien.com/
 
 
 

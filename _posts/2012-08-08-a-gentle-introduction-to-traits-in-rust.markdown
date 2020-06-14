@@ -76,7 +76,7 @@ There's nothing much more to say here; generics are pretty simple. In this form,
 Limitations of generics
 -----------------------
 
-Let's go back to our game example. Suppose I want to add functionality to save the state of the game to disk in [JSON](http://en.wikipedia.org/wiki/JSON). I'll implement some methods on `Monster` and `Player` to do this:
+Let's go back to our game example. Suppose I want to add functionality to save the state of the game to disk in [JSON](https://en.wikipedia.org/wiki/JSON). I'll implement some methods on `Monster` and `Player` to do this:
 
 	impl Monster {
 		// `~str` means "a pointer to a string that'll be automatically freed"
