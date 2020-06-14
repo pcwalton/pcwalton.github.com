@@ -28,5 +28,5 @@ The end result of this is that we seem to be trapped between the rock of unpredi
 
 Fortunately, the research landscape offers some promising potential solutions, which I'll cover next time.
 
-[1]: http://www.boost.org/doc/libs/1_47_0/libs/pool/doc/index.html
+[1]: https://www.boost.org/doc/libs/1_47_0/libs/pool/doc/index.html
 

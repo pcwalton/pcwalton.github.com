@@ -271,14 +271,14 @@ In this document, after we've laid out the sidebar, we can continue on and lay o
 
 No doubt about it, CSS 2.1 is tricky—floats perhaps more than anything else. But in spite of their difficulties, we're finding that there are unexpected places where we can take advantage of parallelism to make a faster engine. I'm cautiously optimistic that Servo's approaching the right design here—not only to make new content faster but also to accelerate the old.
 
-[img-a]: http://i.imgur.com/uNZSiET.png
+[img-a]: https://i.imgur.com/uNZSiET.png
 
-[img-b]: http://i.imgur.com/s18ckTR.png
+[img-b]: https://i.imgur.com/s18ckTR.png
 
 [1]: https://github.com/mozilla/servo/pull/1700
 
 [2]: https://github.com/mozilla/servo/pull/1734
 
-[3]: http://www.eecs.berkeley.edu/~lmeyerov/projects/pbrowser/pubfiles/playout.pdf
+[3]: https://www.eecs.berkeley.edu/~lmeyerov/projects/pbrowser/pubfiles/playout.pdf
 
 [4]: https://developer.mozilla.org/en-US/docs/Web/Guide/CSS/Block_formatting_context
