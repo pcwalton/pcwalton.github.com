@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Unique Pointers Aren't Just About Memory Management – pcwalton – pcwalton's blog</title>
+    <meta content='text/html; charset=utf-8' http-equiv='Content-Type'>
+<meta http-equiv='X-UA-Compatible' content='IE=edge'>
+<meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0'>
+
+
+<meta property="og:description" content="One of the most unusual features of Rust, especially when compared to languages that aren't C++, is the three types of pointers: borrowed pointers (&amp;T), unique pointers (~T), and managed pointers (@T). Most people quite rightly ask &quot;why three pointers? Isn't one enough?&quot; The usual answer is that unique pointers help with manual memory management:
+" />
+
+<meta name="author" content="pcwalton" />
+
+
+<meta property="og:title" content="Unique Pointers Aren't Just About Memory Management" />
+<meta property="twitter:title" content="Unique Pointers Aren't Just About Memory Management" />
+
+
+
+<meta property="og:image" content="http://pcwalton.github.com"/>
+<meta property="twitter:image" content="http://pcwalton.github.com"/>
+
+
+
+    <link rel="stylesheet" type="text/css" href="http://pcwalton.github.com/assets/style.css" />
+    <link rel="alternate" type="application/rss+xml" title="pcwalton - pcwalton's blog" href="http://pcwalton.github.com/feed.xml" />
+    <link rel="canonical" href="_posts/2012-10-03-unique-pointers-arent-just-about-memory-management.html" />
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.css" integrity="sha384-Xi8rHCmBmhbuyyhbI88391ZKP2dmfnOl4rT9ZfRI7mLTdk1wblIUnrIq35nqwEvC" crossorigin="anonymous">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.js" integrity="sha384-X/XCfMm41VSsqRNQgDerQczD69XqmjOOOwYQvr/uuC+j4OPoNhVgjdGFwhvN02Ja" crossorigin="anonymous"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/contrib/auto-render.min.js" integrity="sha384-+XBljXPPiv+OzfbB3cVmLHf4hdUFHlWNZN5spNQ7rmHTXpd7WvJum6fIACpNNfIR" crossorigin="anonymous"></script>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            renderMathInElement(document.body, {
+                // customised options
+                // • auto-render specific keys, e.g.:
+                delimiters: [
+                    {left: '$$$', right: '$$', display: true},
+                    {left: '$$', right: '$$', display: false},
+                    {left: '\\(', right: '\\)', display: false},
+                    {left: '\\[', right: '\\]', display: true}
+                ],
+                // • rendering keys, e.g.:
+                throwOnError : false
+            });
+        });
+    </script>
+
+    <meta name="theme-color" content="#000000">
+    <link rel="icon" type="image/png" sizes="32x32" href="http://pcwalton.github.com/images/favicon-32x32.png">
+    
+
+  </head>
+
+  <body>
+    <div id="bar"></div>
+    <div class="wrapper-container">
+      <div class="wrapper-masthead">
+        <div class="container">
+          <header class="masthead clearfix">
+            
+
+            <div class="site-info">
+              <h1 class="site-name"><a href="http://pcwalton.github.com/">pcwalton</a></h1>
+              <p class="site-description">pcwalton's blog</p> 
+            </div>
+
+            <nav>
+              <a href="http://pcwalton.github.com/">Home</a>
+            </nav>
+          </header>
+        </div>
+      </div>
+
+      <div class="wrapper-main">
+        <div id="main" role="main" class="container">
+
+<article class="post detailed">
+  <h1>Unique Pointers Aren't Just About Memory Management</h1>
+
+  <div>
+    <p class="author_title">Patrick Walton  ·  October  3, 2012</p>
+    
+    <div class="post-tags">
+      
+        
+      
+      
+    </div>
+  </div>
+    
+  <div class="entry">
+    <p>One of the most unusual features of Rust, especially when compared to languages that aren't C++, is the three types of pointers: <em>borrowed</em> pointers (<code>&amp;T</code>), <em>unique</em> pointers (<code>~T</code>), and <em>managed</em> pointers (<code>@T</code>). Most people quite rightly ask &quot;why three pointers? Isn't one enough?&quot; The usual answer is that unique pointers help with manual memory management:</p>
+<ul>
+<li>
+<p>Managed pointers (<code>@T</code>) allow convenient garbage collection.</p>
+</li>
+<li>
+<p>Unique pointers (<code>~T</code>) work like <code>malloc</code> and <code>free</code> from C to allow programmers who don't want the overhead and complexity of GC to avoid it.</p>
+</li>
+<li>
+<p>Borrowed pointers (<code>&amp;T</code>) allow functions to work equally well with both unique and managed pointers.</p>
+</li>
+</ul>
+<p>This is all true, but there's another, equally important reason that's often overlooked: unique pointers allow for efficient, safe concurrency.</p>
+<p>To see why, let's consider the possible ways that an actor- or CSP-based system could enforce safe message passing. By <em>safe</em> message passing I mean that actors can't create data races by simultaneously accessing shared mutable data. In short, we want to enforce that this adage is followed (courtesy of Rob Pike)--&quot;do not communicate by sharing memory; share memory by communicating.&quot;</p>
+<p>There are three simple ways to do this:</p>
+<ol>
+<li>
+<p>Copy all messages sent from actor to actor. Changes that one actor makes to the contents of any message do not affect the other actors' copies of the message.</p>
+</li>
+<li>
+<p>Require that all messages sent from actor to actor be immutable. No actor may make changes to any message after it's created.</p>
+</li>
+<li>
+<p>Make messages inaccessible to the sender once sent--senders &quot;give away&quot; their messages. Only one actor may mutate a message at any given time.</p>
+</li>
+</ol>
+<p>Each of these patterns has advantages and disadvantages:</p>
+<ol>
+<li>
+<p>Copying all messages has the advantage that it's simple to reason about, and the programmer doesn't have to worry about mutability restrictions. The disadvantage is that it comes with a significant performance cost, both in terms of allocation overhead and the copying itself.</p>
+</li>
+<li>
+<p>Requiring that messages be immutable has the advantage that many messages can be efficiently sent, but it still can lead to copying in many cases. Consider, for example, an application that spawns off a task to decode a large JPEG image. To be efficient, the image decoding algorithm generally wants to decode into a mutable buffer. But the decoded image data must be immutable to be sent, which necessitates a potentially-expensive copy of the pixel data out of the work buffer to an immutable location.</p>
+</li>
+<li>
+<p>Making messages inaccessible to the sender has the advantage that it's simple and fast, but it has the disadvantage that it could lead to copying if both the sender and receiver need to access the memory after the send operation.</p>
+</li>
+</ol>
+<p>Because one pattern rarely fits every use case, most actor-based languages, including Rust, have varying levels of support for all three of these patterns (and for more complex patterns that don't appear in the above list, such as <a href="http://en.wikipedia.org/wiki/Software_transactional_memory">software transactional memory</a>). However, each language tends to favor one of the three patterns &quot;by default&quot;. For example, Erlang leans toward option #1 (copying all messages), Clojure leans toward option #2 (immutable sharing), while Rust leans toward option #3 (giving messages away). The important thing to note here is that all of the patterns have advantages and disadvantages, and so different scenarios will call for one or the other. Consider the image decoding example from before; pattern #3 is by far the most efficient way to handle this, as the buffer needs to be mutable while the image decoder works on it, but the decoder has no need for the image after decoding is done.</p>
+<p>Now the simplest way to support pattern #3 <em>safely</em>--in other words, to enforce <em>at compile time</em> that only one actor can hold onto a message at any given time--is through unique pointers. The compiler guarantees that only one reference exists to a uniquely-owned object, enforcing the property we want. Unique pointers support a <em>move</em> operation, which allows functions to &quot;give a pointer away&quot; to another function. So by simply requiring that the &quot;send&quot; method takes a unique pointer and moves its argument, we teach the compiler everything it needs to know to enforce safe concurrency.</p>
+<p>In this way, unique pointers aren't just a tool for manual memory management. They're also a powerful tool for eliminating data races at compile time. The fact that they also allow Rust programs to avoid the garbage collector is just an added bonus.</p>
+
+  </div>
+
+  <div>
+    <p><span class="share-box">Share:</span> <a href="http://twitter.com/share?text=Unique Pointers Aren't Just About Memory Management&url=_posts/2012-10-03-unique-pointers-arent-just-about-memory-management.html" target="_blank">Twitter</a>, <a href="https://www.facebook.com/sharer.php?u=_posts/2012-10-03-unique-pointers-arent-just-about-memory-management.html" target="_blank">Facebook</a></p>
+  </div>
+
+  <!--<div class="date">
+    Written on October  3, 2012
+  </div>-->
+</article>
+        </div>
+      </div>
+
+      <div class="wrapper-footer">
+        <div class="container">
+          <footer class="footer">
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+          </footer>
+        </div>
+      </div>
+    </div>
+
+    
+
+  </body>
+</html>
+

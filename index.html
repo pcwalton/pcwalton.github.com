@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Index – pcwalton – pcwalton's blog</title>
+    <meta content='text/html; charset=utf-8' http-equiv='Content-Type'>
+<meta http-equiv='X-UA-Compatible' content='IE=edge'>
+<meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0'>
+
+
+<meta property="og:description" content="" />
+
+<meta name="author" content="pcwalton" />
+
+
+<meta property="og:title" content="Index" />
+<meta property="twitter:title" content="Index" />
+
+
+
+<meta property="og:image" content="http://pcwalton.github.com"/>
+<meta property="twitter:image" content="http://pcwalton.github.com"/>
+
+
+
+    <link rel="stylesheet" type="text/css" href="http://pcwalton.github.com/assets/style.css" />
+    <link rel="alternate" type="application/rss+xml" title="pcwalton - pcwalton's blog" href="http://pcwalton.github.com/feed.xml" />
+    <link rel="canonical" href="index.html" />
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.css" integrity="sha384-Xi8rHCmBmhbuyyhbI88391ZKP2dmfnOl4rT9ZfRI7mLTdk1wblIUnrIq35nqwEvC" crossorigin="anonymous">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.js" integrity="sha384-X/XCfMm41VSsqRNQgDerQczD69XqmjOOOwYQvr/uuC+j4OPoNhVgjdGFwhvN02Ja" crossorigin="anonymous"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/contrib/auto-render.min.js" integrity="sha384-+XBljXPPiv+OzfbB3cVmLHf4hdUFHlWNZN5spNQ7rmHTXpd7WvJum6fIACpNNfIR" crossorigin="anonymous"></script>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            renderMathInElement(document.body, {
+                // customised options
+                // • auto-render specific keys, e.g.:
+                delimiters: [
+                    {left: '$$$', right: '$$', display: true},
+                    {left: '$$', right: '$$', display: false},
+                    {left: '\\(', right: '\\)', display: false},
+                    {left: '\\[', right: '\\]', display: true}
+                ],
+                // • rendering keys, e.g.:
+                throwOnError : false
+            });
+        });
+    </script>
+
+    <meta name="theme-color" content="#000000">
+    <link rel="icon" type="image/png" sizes="32x32" href="http://pcwalton.github.com/images/favicon-32x32.png">
+    
+
+  </head>
+
+  <body>
+    <div id="bar"></div>
+    <div class="wrapper-container">
+      <div class="wrapper-masthead">
+        <div class="container">
+          <header class="masthead clearfix">
+            
+
+            <div class="site-info">
+              <h1 class="site-name"><a href="http://pcwalton.github.com/">pcwalton</a></h1>
+              <p class="site-description">pcwalton's blog</p> 
+            </div>
+
+            <nav>
+              <a href="http://pcwalton.github.com/">Home</a>
+            </nav>
+          </header>
+        </div>
+      </div>
+
+      <div class="wrapper-main">
+        <div id="main" role="main" class="container">
+
+          <div class="posts">
+  
+    <article class="post">
+      <a href="_posts/2018-12-07-plans-for-2019.html">
+        <h1>Plans for 2019</h1>
+
+        <div>
+          <p class="post_date">December  7, 2018</p>
+        </div>
+      </a>
+      <div class="entry">
+        <p>Many people have asked me what I'm working on lately, and I thought I'd give a quick rundown of my
+status and plans for 2019. I intend to keep this post updated with the status of projects as they
+progress.</p>
+
+      </div>
+
+      <a href="_posts/2018-12-07-plans-for-2019.html" class="read-more">Read More</a>
+    </article>
+  
+    <article class="post">
+      <a href="_posts/2018-02-14-determining-triangle-geometry-in-fragment-shaders.html">
+        <h1>Determining Triangle Geometry in Fragment Shaders</h1>
+
+        <div>
+          <p class="post_date">February 14, 2018</p>
+        </div>
+      </a>
+      <div class="entry">
+        <p>When doing GPU programming, it's sometimes useful to determine the positions of the vertices of the
+current triangle primitive in a fragment shader. The usual advice here is to use a geometry or
+tessellation shader to gather up the positions and pass them along explicitly to the fragment
+shader. It turns out, though, that there is a relatively straightforward solution without any extra
+shader stages using the standard derivative functions <code>dFdx</code> and <code>dFdy</code>. It works as long as the
+(non-perspective-correct) barycentric coordinates for the current fragment are available. I'm sure
+I'm not the first one to come up with this technique, but a quick search didn't find any
+explanations of it, so I thought I'd write it up, because it turned out to be useful in Pathfinder.</p>
+
+      </div>
+
+      <a href="_posts/2018-02-14-determining-triangle-geometry-in-fragment-shaders.html" class="read-more">Read More</a>
+    </article>
+  
+    <article class="post">
+      <a href="_posts/2017-02-14-pathfinder.html">
+        <h1>Pathfinder, a fast GPU-based font rasterizer in Rust</h1>
+
+        <div>
+          <p class="post_date">February 14, 2017</p>
+        </div>
+      </a>
+      <div class="entry">
+        <p>Ever since some initial discussions with <a href="http://levien.com/">Raph Levien</a> (author of <code>font-rs</code>) at RustConf last
+September, I've been thinking about ways to improve vector graphics rendering using modern graphics
+hardware, specifically for fonts. These ideas began to come together in December, and over the past
+couple of months I've been working on actually putting them into a real, usable library. They've
+proved promising, and now I have some results to show.</p>
+
+      </div>
+
+      <a href="_posts/2017-02-14-pathfinder.html" class="read-more">Read More</a>
+    </article>
+  
+    <article class="post">
+      <a href="_posts/2015-12-21-drawing-css-box-shadows-in-webrender.html">
+        <h1>Drawing CSS Box Shadows in WebRender</h1>
+
+        <div>
+          <p class="post_date">December 21, 2015</p>
+        </div>
+      </a>
+      <div class="entry">
+        <p>I recently landed a <a href="https://github.com/glennw/webrender/commit/d57057470cb2bddf0c8ece3fc29cfbe5d03114a2">change</a> in WebRender to draw <a href="https://developer.mozilla.org/en-US/docs/Web/CSS/box-shadow">CSS box shadows</a> using a specialized shader. Because it's an unusual approach to drawing shadows, I thought I'd write up how it works.</p>
+
+      </div>
+
+      <a href="_posts/2015-12-21-drawing-css-box-shadows-in-webrender.html" class="read-more">Read More</a>
+    </article>
+  
+    <article class="post">
+      <a href="_posts/2014-02-25-revamped-parallel-layout-in-servo.html">
+        <h1>Revamped Parallel Layout in Servo</h1>
+
+        <div>
+          <p class="post_date">February 25, 2014</p>
+        </div>
+      </a>
+      <div class="entry">
+        <p>Over the past week I've submitted a <a href="https://github.com/mozilla/servo/pull/1700">series of</a> <a href="https://github.com/mozilla/servo/pull/1734">pull requests</a> that significantly revamp the way parallel layout works in Servo. Originally I did this work to improve performance, but it's also turned out to be necessary to implement more advanced CSS 2.1 features. As it's a fairly novel algorithm (as far as I'm aware) I'd like to take some time to explain it. I'll start with where we are in Servo head and explain how it evolved into what's in my branch. This post assumes a little knowledge about how browser engines work, but little else.</p>
+
+      </div>
+
+      <a href="_posts/2014-02-25-revamped-parallel-layout-in-servo.html" class="read-more">Read More</a>
+    </article>
+  
+    <article class="post">
+      <a href="_posts/2013-06-02-removing-garbage-collection-from-the-rust-language.html">
+        <h1>Removing Garbage Collection From the Rust Language</h1>
+
+        <div>
+          <p class="post_date">June  2, 2013</p>
+        </div>
+      </a>
+      <div class="entry">
+        <p>I've been floating ways to simplify the memory management story in Rust around the core team lately. Memory management is a contentious topic, since we've worked hard to get to the current state of things, and with the push toward stability lately, there is a (quite reasonable!) resistance to any changes at this state. Still, I think the current memory management story in Rust is worth revisiting, as the current state of things may cause us problems down the line. Working with Dave Herman and Niko Matsakis, I've formulated a fairly concrete proposal at this point. The basic idea is to <em>remove garbage collection from the core language and relegate it to the standard library</em>, with a minimal set of language hooks in place to allow for flexible, pluggable automatic memory management.</p>
+
+      </div>
+
+      <a href="_posts/2013-06-02-removing-garbage-collection-from-the-rust-language.html" class="read-more">Read More</a>
+    </article>
+  
+    <article class="post">
+      <a href="_posts/2013-05-20-safe-manual-memory-management.html">
+        <h1>Safe Manual Memory Management</h1>
+
+        <div>
+          <p class="post_date">May 20, 2013</p>
+        </div>
+      </a>
+      <div class="entry">
+        <p>If there's one feature of Rust that is probably the most unique among languages in industry, it's <em>safe manual memory management</em>.</p>
+
+      </div>
+
+      <a href="_posts/2013-05-20-safe-manual-memory-management.html" class="read-more">Read More</a>
+    </article>
+  
+    <article class="post">
+      <a href="_posts/2013-04-18-performance-of-sequential-rust-programs.html">
+        <h1>Performance of Sequential Rust Programs</h1>
+
+        <div>
+          <p class="post_date">April 18, 2013</p>
+        </div>
+      </a>
+      <div class="entry">
+        <p>Although Rust is designed for parallel programs, it is important that the performance of single-threaded, sequential programs not suffer in its design. As far as Servo is concerned, sequential performance is still important in many domains that a Web browser engine must compete in.</p>
+
+      </div>
+
+      <a href="_posts/2013-04-18-performance-of-sequential-rust-programs.html" class="read-more">Read More</a>
+    </article>
+  
+    <article class="post">
+      <a href="_posts/2013-04-12-a-hard-case-for-memory-safety.html">
+        <h1>A Hard Case for Memory Safety</h1>
+
+        <div>
+          <p class="post_date">April 12, 2013</p>
+        </div>
+      </a>
+      <div class="entry">
+        <p>Quick quiz: In this C++ program, is the definition of <code>munge</code> guaranteed to be memory safe? (Assume that the definition of <code>increment_counter</code> uses only modern C++ idioms and doesn't do anything like dereference an invalid pointer.)</p>
+
+      </div>
+
+      <a href="_posts/2013-04-12-a-hard-case-for-memory-safety.html" class="read-more">Read More</a>
+    </article>
+  
+    <article class="post">
+      <a href="_posts/2013-03-18-an-overview-of-memory-management-in-rust.html">
+        <h1>An Overview of Memory Management in Rust</h1>
+
+        <div>
+          <p class="post_date">March 18, 2013</p>
+        </div>
+      </a>
+      <div class="entry">
+        <p>One of the key features of Rust that sets it apart from other new languages is that its memory management is <em>manual</em>—the programmer has explicit control over where and how memory is allocated and deallocated. In this regard, Rust is much more like C++ than like Java, Python, or Go, to name a few. This is an important design decision that makes Rust able to function in performance-critical domains that safe languages previously haven't been able to—top-of-the line games and Web browsers, for example—but it adds a nontrivial learning curve to the language.</p>
+
+      </div>
+
+      <a href="_posts/2013-03-18-an-overview-of-memory-management-in-rust.html" class="read-more">Read More</a>
+    </article>
+  
+    <article class="post">
+      <a href="_posts/2013-03-09-which-pointer-should-i-use.html">
+        <h1>Which Pointer Should I Use?</h1>
+
+        <div>
+          <p class="post_date">March  9, 2013</p>
+        </div>
+      </a>
+      <div class="entry">
+        <p>Deciding whether to use a managed <code>@</code> pointer or an owned <code>~</code> pointer to allocate memory is one of the most frequent sources of confusion for newcomers to Rust. There are two main angles to consider when deciding whether to use an <code>@</code> pointer or a <code>~</code> pointer in Rust: <em>memory management</em> and <em>concurrency</em>. I'll cover each in turn.</p>
+
+      </div>
+
+      <a href="_posts/2013-03-09-which-pointer-should-i-use.html" class="read-more">Read More</a>
+    </article>
+  
+    <article class="post">
+      <a href="_posts/2013-01-21-the-new-borrow-check-in-a-nutshell.html">
+        <h1>The New Borrow Check in a Nutshell</h1>
+
+        <div>
+          <p class="post_date">January 21, 2013</p>
+        </div>
+      </a>
+      <div class="entry">
+        <p>If you've used Rust for any period of time, you've probably been bitten by the mysterious <em>borrow check</em>—the compiler pass responsible for preventing <a href="http://stackoverflow.com/questions/6438086/iterator-invalidation-rules">iterator invalidation</a>, as well as a few other dangling pointer scenarios. The current iteration of the borrow check enforces a fairly complex set of rules. Because the rules were hard to understand and ruled out too many valid programs, we were never really satisfied with the analysis; without a simple set of rules to follow, programmers will get frustrated and give up. To remedy this, Niko has proposed a <a href="http://smallcultfollowing.com/babysteps/blog/2012/11/18/imagine-never-hearing-the-phrase-aliasable/">revamp</a> of the borrow checker known as &quot;Imagine Never Hearing the Phrase 'Aliasable, Mutable' Again&quot;. This has mostly been implemented in <a href="https://github.com/mozilla/rust/pull/4454">a pull request</a> now, so I'd like to take the opportunity to explain the new rules. I'm particularly excited about this change because now the entire set of borrow check rules are simple enough to boil down to one principle.</p>
+
+      </div>
+
+      <a href="_posts/2013-01-21-the-new-borrow-check-in-a-nutshell.html" class="read-more">Read More</a>
+    </article>
+  
+    <article class="post">
+      <a href="_posts/2012-12-30-the-two-meanings-of-impl.html">
+        <h1>The Two Meanings of "impl"</h1>
+
+        <div>
+          <p class="post_date">December 30, 2012</p>
+        </div>
+      </a>
+      <div class="entry">
+        <p><code>impl</code> declarations in Rust have two forms. The subtle distinction between the two can be confusing at first, so I'll briefly explain the difference here.</p>
+
+      </div>
+
+      <a href="_posts/2012-12-30-the-two-meanings-of-impl.html" class="read-more">Read More</a>
+    </article>
+  
+    <article class="post">
+      <a href="_posts/2012-12-28-a-tour-of-vectors.html">
+        <h1>A Tour of Vector Representations</h1>
+
+        <div>
+          <p class="post_date">December 28, 2012</p>
+        </div>
+      </a>
+      <div class="entry">
+        <p>One aspect of Rust that's often confusing to newcomers is its treatment of strings and vectors (also known as arrays or lists). As a result of its focus on systems programming, Rust has a somewhat lower-level concept of a vector than most other languages do. As part of an overall goal to make Rust easy to understand, I thought I'd write up a quick tour of the way other languages' vectors work from the perspective of the machine in order to make it easier to map these concepts into Rust.</p>
+
+      </div>
+
+      <a href="_posts/2012-12-28-a-tour-of-vectors.html" class="read-more">Read More</a>
+    </article>
+  
+    <article class="post">
+      <a href="_posts/2012-12-26-typestate-is-dead.html">
+        <h1>Typestate Is Dead, Long Live Typestate!</h1>
+
+        <div>
+          <p class="post_date">December 26, 2012</p>
+        </div>
+      </a>
+      <div class="entry">
+        <p>One well-known fact about Rust is that the typestate system, which was one of the most unique aspects of the language early on, was dropped in Rust 0.4. The reason was that &quot;in practice, it found little use&quot; (courtesy of Wikipedia), which is fairly accurate. However, what's less well known is that, in the meantime, Rust gained the building blocks necessary for typestate via its uniqueness typing system. With the right patterns, most of the safety guarantees that typestate enabled can be achieved, although it's not as easy to use.</p>
+
+      </div>
+
+      <a href="_posts/2012-12-26-typestate-is-dead.html" class="read-more">Read More</a>
+    </article>
+  
+    <article class="post">
+      <a href="_posts/2012-10-03-unique-pointers-arent-just-about-memory-management.html">
+        <h1>Unique Pointers Aren't Just About Memory Management</h1>
+
+        <div>
+          <p class="post_date">October  3, 2012</p>
+        </div>
+      </a>
+      <div class="entry">
+        <p>One of the most unusual features of Rust, especially when compared to languages that aren't C++, is the three types of pointers: <em>borrowed</em> pointers (<code>&amp;T</code>), <em>unique</em> pointers (<code>~T</code>), and <em>managed</em> pointers (<code>@T</code>). Most people quite rightly ask &quot;why three pointers? Isn't one enough?&quot; The usual answer is that unique pointers help with manual memory management:</p>
+
+      </div>
+
+      <a href="_posts/2012-10-03-unique-pointers-arent-just-about-memory-management.html" class="read-more">Read More</a>
+    </article>
+  
+    <article class="post">
+      <a href="_posts/2012-08-08-a-gentle-introduction-to-traits-in-rust.html">
+        <h1>A Gentle Introduction to Traits in Rust</h1>
+
+        <div>
+          <p class="post_date">August  8, 2012</p>
+        </div>
+      </a>
+      <div class="entry">
+        <p>Rust traits pack a lot of flexibility into a simple system, and they're one of my favorite features of the language. But as a result of the rapid pace of the language's development, there's been a fair amount of confusion as to how they work. As such, I figured I'd write up a quick tutorial explaining why and how to use them.</p>
+
+      </div>
+
+      <a href="_posts/2012-08-08-a-gentle-introduction-to-traits-in-rust.html" class="read-more">Read More</a>
+    </article>
+  
+    <article class="post">
+      <a href="_posts/2012-06-03-maximally-minimal-classes-for-rust.html">
+        <h1>Maximally Minimal Classes for Rust</h1>
+
+        <div>
+          <p class="post_date">June  3, 2012</p>
+        </div>
+      </a>
+      <div class="entry">
+        <p>Now that classes have been implemented as per the original proposal, the other Rusters and I have been starting to get a feel for the way they work out in practice. The results are positive, but not optimal. Although they definitely succeeded in avoiding the rigidity of traditional object-oriented languages like Java, they still have two basic problems: (1) they feel somewhat out of place with the rest of the language; and (2) they're still too heavyweight. Nevertheless, the functionality that they enabled is important, and we shouldn't sacrifice it.</p>
+
+      </div>
+
+      <a href="_posts/2012-06-03-maximally-minimal-classes-for-rust.html" class="read-more">Read More</a>
+    </article>
+  
+    <article class="post">
+      <a href="_posts/2012-05-28-coherence.html">
+        <h1>Coherence, modularity, and extensibility for typeclasses</h1>
+
+        <div>
+          <p class="post_date">May 28, 2012</p>
+        </div>
+      </a>
+      <div class="entry">
+        <p>I've been experimenting with the design of a modification to Rust typeclasses. Because it's always best to start with code, here's a synopsis of what I have in mind:</p>
+
+      </div>
+
+      <a href="_posts/2012-05-28-coherence.html" class="read-more">Read More</a>
+    </article>
+  
+    <article class="post">
+      <a href="_posts/2012-04-23-why-lifetimes.html">
+        <h1>Why Lifetimes?</h1>
+
+        <div>
+          <p class="post_date">April 23, 2012</p>
+        </div>
+      </a>
+      <div class="entry">
+        <p>One of the most unique new features of Rust is its slowly-growing support for <em>regions</em>—or <em>lifetimes</em>, as some of us core developers like to call them. As lifetimes aren't found in any mainstream languages, I thought I'd expand upon why we want them and how they can be used to improve memory management for performance (especially interactive performance) without sacrificing safety. In this first post I'll explain why existing memory models weren't enough and why we went searching for alternatives. Here I'm assuming basic knowledge of garbage collection, reference counting, and <code>malloc</code>/<code>free</code>, but nothing more.</p>
+
+      </div>
+
+      <a href="_posts/2012-04-23-why-lifetimes.html" class="read-more">Read More</a>
+    </article>
+  
+</div>
+
+        </div>
+      </div>
+
+      <div class="wrapper-footer">
+        <div class="container">
+          <footer class="footer">
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+          </footer>
+        </div>
+      </div>
+    </div>
+
+    
+
+  </body>
+</html>
+
+

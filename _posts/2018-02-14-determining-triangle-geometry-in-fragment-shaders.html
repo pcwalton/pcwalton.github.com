@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Determining Triangle Geometry in Fragment Shaders – pcwalton – pcwalton's blog</title>
+    <meta content='text/html; charset=utf-8' http-equiv='Content-Type'>
+<meta http-equiv='X-UA-Compatible' content='IE=edge'>
+<meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0'>
+
+
+<meta property="og:description" content="When doing GPU programming, it's sometimes useful to determine the positions of the vertices of the
+current triangle primitive in a fragment shader. The usual advice here is to use a geometry or
+tessellation shader to gather up the positions and pass them along explicitly to the fragment
+shader. It turns out, though, that there is a relatively straightforward solution without any extra
+shader stages using the standard derivative functions dFdx and dFdy. It works as long as the
+(non-perspective-correct) barycentric coordinates for the current fragment are available. I'm sure
+I'm not the first one to come up with this technique, but a quick search didn't find any
+explanations of it, so I thought I'd write it up, because it turned out to be useful in Pathfinder.
+" />
+
+<meta name="author" content="pcwalton" />
+
+
+<meta property="og:title" content="Determining Triangle Geometry in Fragment Shaders" />
+<meta property="twitter:title" content="Determining Triangle Geometry in Fragment Shaders" />
+
+
+
+<meta property="og:image" content="http://pcwalton.github.com"/>
+<meta property="twitter:image" content="http://pcwalton.github.com"/>
+
+
+
+    <link rel="stylesheet" type="text/css" href="http://pcwalton.github.com/assets/style.css" />
+    <link rel="alternate" type="application/rss+xml" title="pcwalton - pcwalton's blog" href="http://pcwalton.github.com/feed.xml" />
+    <link rel="canonical" href="_posts/2018-02-14-determining-triangle-geometry-in-fragment-shaders.html" />
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.css" integrity="sha384-Xi8rHCmBmhbuyyhbI88391ZKP2dmfnOl4rT9ZfRI7mLTdk1wblIUnrIq35nqwEvC" crossorigin="anonymous">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.js" integrity="sha384-X/XCfMm41VSsqRNQgDerQczD69XqmjOOOwYQvr/uuC+j4OPoNhVgjdGFwhvN02Ja" crossorigin="anonymous"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/contrib/auto-render.min.js" integrity="sha384-+XBljXPPiv+OzfbB3cVmLHf4hdUFHlWNZN5spNQ7rmHTXpd7WvJum6fIACpNNfIR" crossorigin="anonymous"></script>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            renderMathInElement(document.body, {
+                // customised options
+                // • auto-render specific keys, e.g.:
+                delimiters: [
+                    {left: '$$$', right: '$$', display: true},
+                    {left: '$$', right: '$$', display: false},
+                    {left: '\\(', right: '\\)', display: false},
+                    {left: '\\[', right: '\\]', display: true}
+                ],
+                // • rendering keys, e.g.:
+                throwOnError : false
+            });
+        });
+    </script>
+
+    <meta name="theme-color" content="#000000">
+    <link rel="icon" type="image/png" sizes="32x32" href="http://pcwalton.github.com/images/favicon-32x32.png">
+    
+
+  </head>
+
+  <body>
+    <div id="bar"></div>
+    <div class="wrapper-container">
+      <div class="wrapper-masthead">
+        <div class="container">
+          <header class="masthead clearfix">
+            
+
+            <div class="site-info">
+              <h1 class="site-name"><a href="http://pcwalton.github.com/">pcwalton</a></h1>
+              <p class="site-description">pcwalton's blog</p> 
+            </div>
+
+            <nav>
+              <a href="http://pcwalton.github.com/">Home</a>
+            </nav>
+          </header>
+        </div>
+      </div>
+
+      <div class="wrapper-main">
+        <div id="main" role="main" class="container">
+
+<article class="post detailed">
+  <h1>Determining Triangle Geometry in Fragment Shaders</h1>
+
+  <div>
+    <p class="author_title">Patrick Walton  ·  February 14, 2018</p>
+    
+    <div class="post-tags">
+      
+        
+      
+      
+    </div>
+  </div>
+    
+  <div class="entry">
+    <p>When doing GPU programming, it's sometimes useful to determine the positions of the vertices of the
+current triangle primitive in a fragment shader. The usual advice here is to use a geometry or
+tessellation shader to gather up the positions and pass them along explicitly to the fragment
+shader. It turns out, though, that there is a relatively straightforward solution without any extra
+shader stages using the standard derivative functions <code>dFdx</code> and <code>dFdy</code>. It works as long as the
+(non-perspective-correct) barycentric coordinates for the current fragment are available. I'm sure
+I'm not the first one to come up with this technique, but a quick search didn't find any
+explanations of it, so I thought I'd write it up, because it turned out to be useful in Pathfinder.</p>
+<p>An important caveat applies: Make sure that you're sure you need to do this. It's easy to go wild
+with this technique and end up with more varyings than the simple solution would call for. In
+general, this technique is most useful when it saves a geometry or tessellation shader invocation.</p>
+<p>Here I assume that the barycentric coordinates $$\lambda_0, \lambda_1, \lambda_2$$ of the current
+fragment are known. They must sum to 1, so it suffices to know two of them to compute the other
+one. If you need barycentric coordinates and cannot compute them from other varyings you have
+around, then you can pass them to the fragment shader by declaring <code>noperspective in vec2 vLambda;</code>
+and setting <code>vLambda</code> to $$(1, 0)$$, $$(0, 1)$$, and $$(0, 0)$$ for the first, second, and third
+vertices respectively. We also need the gradients $$\nabla_{\lambda_0}$$ and
+$$\nabla_{\lambda_1}$$. Following the example above, the function <code>dFdx(vLambda)</code> will yield
+$$(D_x\lambda_0, D_x\lambda_1)$$, and <code>dFdy(vLambda)</code> will yield $$(D_y\lambda_0, D_y\lambda_1)$$.</p>
+<p>Let $$p = (x, y)$$ be the screen-space position of the current fragment (i.e. <code>gl_FragCoord</code>), and
+let $$p_r = (x + 1, y)$$ and $$p_u = (x, y + 1)$$ be the positions of the fragments to the
+immediate right and above, respectively. $$\lambda_0$$, $$\lambda_1$$, and $$\lambda_2$$ are the
+barycentric coordinates of the current fragment; likewise, $$\lambda_{0r}$$, $$\lambda_{1r}$$, and
+$$\lambda_{2r}$$ are those of the fragment to the right, and $$\lambda_{0u}$$, $$\lambda_{1u}$$,
+and $$\lambda_{2u}$$ are those of the fragment above.</p>
+<p>We know that for all triangle vertices $$i \in {0, 1, 2}$$,
+$$\lambda_{ir} = \lambda_i + D_x\lambda_i$$, and $$\lambda_{iu} = \lambda_i + D_y\lambda_i$$.
+Putting it all together, we formulate a system of equations:</p>
+<p>$$$
+\begin{cases}
+\lambda_0 v_0 + \lambda_1 v_1 + \lambda_2 v_2 &amp; = p \
+\lambda_{r0} v_0 + \lambda_{r1} v_1 + \lambda_{r2} v_2 &amp; = p_r \
+\lambda_{u0} v_0 + \lambda_{u1} v_1 + \lambda_{u2} v_2 &amp; = p_u \
+\end{cases}
+$$</p>
+<p>After some algebra and the application of Cramer's rule, we get:</p>
+<p>$$$
+\begin{align} \
+v_{0x} &amp;= \frac{
+x \det \begin{bmatrix} D_x\lambda_0 &amp; D_y\lambda_0 \ D_x\lambda_1 &amp; D_y\lambda_1 \end{bmatrix}
++ \det \begin{bmatrix} D_y\lambda_0 &amp; D_y\lambda_1 \ \lambda_0 &amp; \lambda_1 \end{bmatrix}
++ D_y\lambda_1
+}{\det \begin{bmatrix} D_x\lambda_0 &amp; D_y\lambda_0 \ D_x\lambda_1 &amp; D_y\lambda_1 \end{bmatrix}} \
+v_{0y} &amp;= \frac{
+y \det \begin{bmatrix} D_x\lambda_0 &amp; D_y\lambda_0 \ D_x\lambda_1 &amp; D_y\lambda_1 \end{bmatrix}
++ \det \begin{bmatrix} \lambda_0 &amp; \lambda_1 \ D_x\lambda_0 &amp; D_x\lambda_1 \end{bmatrix}
+- D_x\lambda_1
+}{\det \begin{bmatrix} D_x\lambda_0 &amp; D_y\lambda_0 \ D_x\lambda_1 &amp; D_y\lambda_1 \end{bmatrix}} \
+v_{1x} &amp;= \frac{
+x \det \begin{bmatrix} D_x\lambda_0 &amp; D_y\lambda_0 \ D_x\lambda_1 &amp; D_y\lambda_1 \end{bmatrix}
++ \det \begin{bmatrix} D_y\lambda_0 &amp; D_y\lambda_1 \ \lambda_0 &amp; \lambda_1 \end{bmatrix}
+- D_y\lambda_0
+}{\det \begin{bmatrix} D_x\lambda_0 &amp; D_y\lambda_0 \ D_x\lambda_1 &amp; D_y\lambda_1 \end{bmatrix}} \
+v_{1y} &amp;= \frac{
+y \det \begin{bmatrix} D_x\lambda_0 &amp; D_y\lambda_0 \ D_x\lambda_1 &amp; D_y\lambda_1 \end{bmatrix}
++ \det \begin{bmatrix} \lambda_0 &amp; \lambda_1 \ D_x\lambda_0 &amp; D_x\lambda_1 \end{bmatrix}
++ D_x\lambda_0
+}{\det \begin{bmatrix} D_x\lambda_0 &amp; D_y\lambda_0 \ D_x\lambda_1 &amp; D_y\lambda_1 \end{bmatrix}} \
+v_{2x} &amp;= \frac{
+x \det \begin{bmatrix} D_x\lambda_0 &amp; D_y\lambda_0 \ D_x\lambda_1 &amp; D_y\lambda_1 \end{bmatrix}
++ \det \begin{bmatrix} D_y\lambda_0 &amp; D_y\lambda_1 \ \lambda_0 &amp; \lambda_1 \end{bmatrix}
+}{\det \begin{bmatrix} D_x\lambda_0 &amp; D_y\lambda_0 \ D_x\lambda_1 &amp; D_y\lambda_1 \end{bmatrix}} \
+v_{2y} &amp;= \frac{
+y \det \begin{bmatrix} D_x\lambda_0 &amp; D_y\lambda_0 \ D_x\lambda_1 &amp; D_y\lambda_1 \end{bmatrix}
++ \det \begin{bmatrix} \lambda_0 &amp; \lambda_1 \ D_x\lambda_0 &amp; D_x\lambda_1 \end{bmatrix}
+}{\det \begin{bmatrix} D_x\lambda_0 &amp; D_y\lambda_0 \ D_x\lambda_1 &amp; D_y\lambda_1 \end{bmatrix}} \
+\end{align}
+$$</p>
+<p>Notice that
+$$\det \begin{bmatrix} D_x\lambda_0 &amp; D_y\lambda_0 \ D_x\lambda_1 &amp; D_y\lambda_1 \end{bmatrix}$$
+shows up over and over again in these formulas. That value is the Jacobian determinant $$J$$. Using
+$$\lambda$$ to represent the row vector $$\begin{bmatrix} \lambda_0 &amp; \lambda_1 \end{bmatrix}$$, we
+can more succinctly rewrite the above as:</p>
+<p>$$$
+\begin{align} \
+v_{0x} &amp;= \frac{Jx + \det \begin{bmatrix} D_y\lambda \ \lambda \end{bmatrix} + D_y\lambda_1}{J} \
+v_{0y} &amp;= \frac{Jy + \det \begin{bmatrix} \lambda \ D_x\lambda \end{bmatrix} - D_x\lambda_1}{J} \
+v_{1x} &amp;= \frac{Jx + \det \begin{bmatrix} D_y\lambda \ \lambda \end{bmatrix} - D_y\lambda_0}{J} \
+v_{1y} &amp;= \frac{Jy + \det \begin{bmatrix} \lambda \ D_x\lambda \end{bmatrix} + D_x\lambda_0}{J} \
+v_{2x} &amp;= \frac{Jx + \det \begin{bmatrix} D_y\lambda \ \lambda \end{bmatrix}}{J} \
+v_{2y} &amp;= \frac{Jy + \det \begin{bmatrix} \lambda \ D_x\lambda \end{bmatrix}}{J} \
+\end{align}
+$$</p>
+<p>Along with point positions, sometimes the triangle edge vectors $$v_{01}$$, $$v_{12}$$, and
+$$v_{20}$$ are useful. These have even simpler formulas:</p>
+<p>$$$
+\begin{align} \
+v_{01x} &amp;= \frac{-(D_y\lambda_0 + D_y\lambda_1)}{J} \
+v_{01y} &amp;= \frac{D_x\lambda_0 + D_x\lambda_1}{J} \
+v_{12x} &amp;= \frac{D_y\lambda_0}{J} \
+v_{12y} &amp;= \frac{-D_x\lambda_0}{J} \
+v_{20x} &amp;= \frac{D_y\lambda_1}{J} \
+v_{20y} &amp;= \frac{-D_x\lambda_1}{J} \
+\end{align}
+$$</p>
+<p>The expressions for the vectors $$v_{pi} = p - v_i$$ (for vertices $$i \in {0, 1, 2}$$) are
+straightforward as well:</p>
+<p>$$$
+\begin{align} \
+v_{p0x} &amp;= \frac{\det\begin{bmatrix} \lambda \ D_y\lambda \end{bmatrix} - D_y\lambda_1}{J} \
+v_{p0y} &amp;= \frac{\det\begin{bmatrix} D_x\lambda \ \lambda \end{bmatrix} + D_x\lambda_1}{J} \
+v_{p1x} &amp;= \frac{\det\begin{bmatrix} \lambda \ D_y\lambda \end{bmatrix} + D_y\lambda_0}{J} \
+v_{p1y} &amp;= \frac{\det\begin{bmatrix} D_x\lambda \ \lambda \end{bmatrix} - D_x\lambda_0}{J} \
+v_{p2x} &amp;= \frac{\det\begin{bmatrix} \lambda \ D_y\lambda \end{bmatrix}}{J} \
+v_{p2y} &amp;= \frac{\det\begin{bmatrix} D_x\lambda \ \lambda \end{bmatrix}}{J} \
+\end{align}
+$$</p>
+<p>Below is some GLSL code to compute screen-space triangle vertex positions from
+$$\lambda_0$$ and $$\lambda_1$$ (as <code>lambda.x</code> and <code>lambda.y</code> respectively).</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#c0c5ce;">void vertexPositions(out vec2 outV0,
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">                     out vec2 outV1,
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">                     out vec2 outV2,
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">                     vec2 fragCoord,
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">                     vec2 lambda) {
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    mat2 j = mat2(dFdx(lambda), dFdy(lambda));
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    float detJ = determinant(j);
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    vec2 detXY = vec2(determinant(mat2(j[1], lambda)),
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">                      determinant(mat2(lambda, j[0])));
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    vec2 v = detJ * fragCoord + detXY;
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    outV0 = (v + vec2(j[1][1], -j[0][1])) / detJ;
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    outV1 = (v + vec2(-j[1][0], j[0][0])) / detJ;
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    outV2 = v / detJ;
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">}
+</span></pre>
+
+  </div>
+
+  <div>
+    <p><span class="share-box">Share:</span> <a href="http://twitter.com/share?text=Determining Triangle Geometry in Fragment Shaders&url=_posts/2018-02-14-determining-triangle-geometry-in-fragment-shaders.html" target="_blank">Twitter</a>, <a href="https://www.facebook.com/sharer.php?u=_posts/2018-02-14-determining-triangle-geometry-in-fragment-shaders.html" target="_blank">Facebook</a></p>
+  </div>
+
+  <!--<div class="date">
+    Written on February 14, 2018
+  </div>-->
+</article>
+        </div>
+      </div>
+
+      <div class="wrapper-footer">
+        <div class="container">
+          <footer class="footer">
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+          </footer>
+        </div>
+      </div>
+    </div>
+
+    
+
+  </body>
+</html>
+

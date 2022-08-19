@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>The New Borrow Check in a Nutshell – pcwalton – pcwalton's blog</title>
+    <meta content='text/html; charset=utf-8' http-equiv='Content-Type'>
+<meta http-equiv='X-UA-Compatible' content='IE=edge'>
+<meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0'>
+
+
+<meta property="og:description" content="If you've used Rust for any period of time, you've probably been bitten by the mysterious borrow check—the compiler pass responsible for preventing iterator invalidation, as well as a few other dangling pointer scenarios. The current iteration of the borrow check enforces a fairly complex set of rules. Because the rules were hard to understand and ruled out too many valid programs, we were never really satisfied with the analysis; without a simple set of rules to follow, programmers will get frustrated and give up. To remedy this, Niko has proposed a revamp of the borrow checker known as &quot;Imagine Never Hearing the Phrase 'Aliasable, Mutable' Again&quot;. This has mostly been implemented in a pull request now, so I'd like to take the opportunity to explain the new rules. I'm particularly excited about this change because now the entire set of borrow check rules are simple enough to boil down to one principle.
+" />
+
+<meta name="author" content="pcwalton" />
+
+
+<meta property="og:title" content="The New Borrow Check in a Nutshell" />
+<meta property="twitter:title" content="The New Borrow Check in a Nutshell" />
+
+
+
+<meta property="og:image" content="http://pcwalton.github.com"/>
+<meta property="twitter:image" content="http://pcwalton.github.com"/>
+
+
+
+    <link rel="stylesheet" type="text/css" href="http://pcwalton.github.com/assets/style.css" />
+    <link rel="alternate" type="application/rss+xml" title="pcwalton - pcwalton's blog" href="http://pcwalton.github.com/feed.xml" />
+    <link rel="canonical" href="_posts/2013-01-21-the-new-borrow-check-in-a-nutshell.html" />
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.css" integrity="sha384-Xi8rHCmBmhbuyyhbI88391ZKP2dmfnOl4rT9ZfRI7mLTdk1wblIUnrIq35nqwEvC" crossorigin="anonymous">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.js" integrity="sha384-X/XCfMm41VSsqRNQgDerQczD69XqmjOOOwYQvr/uuC+j4OPoNhVgjdGFwhvN02Ja" crossorigin="anonymous"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/contrib/auto-render.min.js" integrity="sha384-+XBljXPPiv+OzfbB3cVmLHf4hdUFHlWNZN5spNQ7rmHTXpd7WvJum6fIACpNNfIR" crossorigin="anonymous"></script>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            renderMathInElement(document.body, {
+                // customised options
+                // • auto-render specific keys, e.g.:
+                delimiters: [
+                    {left: '$$$', right: '$$', display: true},
+                    {left: '$$', right: '$$', display: false},
+                    {left: '\\(', right: '\\)', display: false},
+                    {left: '\\[', right: '\\]', display: true}
+                ],
+                // • rendering keys, e.g.:
+                throwOnError : false
+            });
+        });
+    </script>
+
+    <meta name="theme-color" content="#000000">
+    <link rel="icon" type="image/png" sizes="32x32" href="http://pcwalton.github.com/images/favicon-32x32.png">
+    
+
+  </head>
+
+  <body>
+    <div id="bar"></div>
+    <div class="wrapper-container">
+      <div class="wrapper-masthead">
+        <div class="container">
+          <header class="masthead clearfix">
+            
+
+            <div class="site-info">
+              <h1 class="site-name"><a href="http://pcwalton.github.com/">pcwalton</a></h1>
+              <p class="site-description">pcwalton's blog</p> 
+            </div>
+
+            <nav>
+              <a href="http://pcwalton.github.com/">Home</a>
+            </nav>
+          </header>
+        </div>
+      </div>
+
+      <div class="wrapper-main">
+        <div id="main" role="main" class="container">
+
+<article class="post detailed">
+  <h1>The New Borrow Check in a Nutshell</h1>
+
+  <div>
+    <p class="author_title">Patrick Walton  ·  January 21, 2013</p>
+    
+    <div class="post-tags">
+      
+        
+      
+      
+    </div>
+  </div>
+    
+  <div class="entry">
+    <p>If you've used Rust for any period of time, you've probably been bitten by the mysterious <em>borrow check</em>—the compiler pass responsible for preventing <a href="http://stackoverflow.com/questions/6438086/iterator-invalidation-rules">iterator invalidation</a>, as well as a few other dangling pointer scenarios. The current iteration of the borrow check enforces a fairly complex set of rules. Because the rules were hard to understand and ruled out too many valid programs, we were never really satisfied with the analysis; without a simple set of rules to follow, programmers will get frustrated and give up. To remedy this, Niko has proposed a <a href="http://smallcultfollowing.com/babysteps/blog/2012/11/18/imagine-never-hearing-the-phrase-aliasable/">revamp</a> of the borrow checker known as &quot;Imagine Never Hearing the Phrase 'Aliasable, Mutable' Again&quot;. This has mostly been implemented in <a href="https://github.com/mozilla/rust/pull/4454">a pull request</a> now, so I'd like to take the opportunity to explain the new rules. I'm particularly excited about this change because now the entire set of borrow check rules are simple enough to boil down to one principle.</p>
+<p>Here's the rule that the new borrow check is in charge of enforcing: <em>Whenever you take a pointer to an object, you may not modify that object as long as that pointer exists, except through that pointer.</em></p>
+<p>(Strictly speaking, this is not all the new borrow check enforces, but the other errors the pass can produce are generally straightforward and simple dangling pointer errors. Also, I'm omitting the rules related to <code>&amp;const</code>, as this rarely-used type of pointer is likely to be removed.)</p>
+<p>For unique pointers (<code>~</code>) and borrowed pointers (<code>&amp;</code>), this rule is enforced at compile time, without any runtime overhead. Here's an example:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#c0c5ce;">let mut the_magic_word = Some(~&quot;zap&quot;);
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">match the_magic_word {
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    None =&gt; {}
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    Some(ref word) {
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">        the_magic_word = None; // ERROR
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">        io::println(*word);
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    }
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">}
+</span></pre>
+<p>Here, the line marked <code>ERROR</code> produces the error &quot;assigning to mutable local variable prohibited due to outstanding loan&quot;. This happens because we violated the rule above—the line <code>the_magic_word = None</code> mutates the value <code>the_magic_word</code> while there exists a pointer to it (<code>word</code>).</p>
+<p>Another example:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#c0c5ce;">struct Foo {
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    array: ~[int]
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">}
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">impl Foo {
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    fn bar(&amp;mut self) {
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">        for self.array.each |i| {
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">            self.array = ~[];  // ERROR
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">            io::println(i.to_str());
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">        }
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    }
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">}
+</span></pre>
+<p>Again, the error is &quot;assigning to mutable field prohibited due to outstanding loan&quot;. As before, it's traceable to a violation of the mutation rule: the line <code>self.array = ~[]</code> mutates the <code>self.array</code> field while a pointer (<code>i</code>) into it exists.</p>
+<p>This example is interesting for a couple of reasons. First of all, it illustrates the way the Rust compiler can catch iterator invalidation issues without runtime overhead in many cases: here the compiler is able to detect that the <code>i</code> iterator, which has type <code>&amp;int</code>, was invalidated, and rejects the program instead of permitting undefined behavior at runtime. Second, this example illustrates something not possible under the current borrow check regime that the new borrow check allows: namely, taking an immutable pointer to a field accessible through a <code>&amp;mut</code> pointer. (An immutable pointer is needed to call the <code>each</code> method to prevent iterator invalidation.) More than any other, this restriction probably led to the greatest number of borrow check errors in practice, since it prevented iterating over any collections reachable from <code>&amp;mut</code> pointers.</p>
+<p>Now all of this works fine for <code>&amp;</code> and <code>~</code> pointers, but what about managed boxes (<code>@</code>)? It turns out that immutable <code>@</code> boxes are easy to deal with; since they can't be mutated at all, the borrow checker doesn't have to do anything to enforce the no-mutation rule. However, for <code>@mut</code> boxes, the situation is more complicated. For <code>@mut</code> boxes, the new borrow checker inserts <em>runtime</em> checks to enforce the pointer rules. Attempting to mutate an <code>@mut</code> box while a pointer to its contents exists results in task failure at runtime, unless the mutation is done through that pointer.</p>
+<p>Interestingly, this is similar to the way various debug or safe STL implementations (for example, Microsoft's) guard against iterator invalidation. The differences are: (1) in Rust, the checks are automatically inserted by the compiler instead of built into each collection by hand; and (2) the checks are only needed for garbage collected data, as the compiler can perform the checks at compile time for other types of data.</p>
+<p>There is one gotcha here, however. As implemented, if any pointer exists to <em>any</em> part of an <code>@mut</code> box, then the <em>entire</em> box cannot be mutated while that pointer exists. This means that this example will fail:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#c0c5ce;">struct Dungeon {
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    monsters: ~[Monster],
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    total_gold: int
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">}
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">impl Dungeon {
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    fn count_gold(@mut self) { // note `@mut self`, not `&amp;mut self`
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">	    self.total_gold = 0;
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">	    for self.monsters.each |monster| { // pointer created here
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">		    self.total_gold += monster.gold;
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">	    }
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">	}
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">}
+</span></pre>
+<p>Note that the iterator variable <code>monster</code> has type <code>&amp;Monster</code>. This is a pointer to the inside of <code>Dungeon</code>, so the assignment to <code>self.total_gold</code> violates the mutation rule. Unfortunately, the compiler does not currently catch this, so the program will fail at runtime.</p>
+<p>There are a couple of workarounds. The simplest way is to change <code>@mut self</code> to <code>&amp;mut self</code>. Since there is no need to give out the <code>@mut</code> pointer for this operation, this is safe. Roughly speaking, the compile-time checks operate on a per-field basis, while the runtime checks operate on a per-box basis. So this change makes the operation succeed. Another possibility is to make <code>total_gold</code> into a local variable and assign to the field after the <code>for</code> loop.</p>
+<p>Despite the fact that this error is easy to fix, I'm concerned about the fact that the compiler won't catch this kind of thing at compile time. So I think we should introduce a set of warnings that looks for common violations of this rule. It's impossible to make the warnings catch <em>all</em> failures—that's the reason why the check is done at runtime in the first place. (In general, trying to make the compiler reason about <code>@</code> boxes is hard, since the compiler has no idea how many references to them exist.) But I suspect that we could make the analysis good enough to catch the majority of these errors in practice.</p>
+<p>In any case, the take-away from all of this is that the borrow checker should be much easier and more transparent with this change. There's essentially just one straightforward rule to remember.</p>
+
+  </div>
+
+  <div>
+    <p><span class="share-box">Share:</span> <a href="http://twitter.com/share?text=The New Borrow Check in a Nutshell&url=_posts/2013-01-21-the-new-borrow-check-in-a-nutshell.html" target="_blank">Twitter</a>, <a href="https://www.facebook.com/sharer.php?u=_posts/2013-01-21-the-new-borrow-check-in-a-nutshell.html" target="_blank">Facebook</a></p>
+  </div>
+
+  <!--<div class="date">
+    Written on January 21, 2013
+  </div>-->
+</article>
+        </div>
+      </div>
+
+      <div class="wrapper-footer">
+        <div class="container">
+          <footer class="footer">
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+          </footer>
+        </div>
+      </div>
+    </div>
+
+    
+
+  </body>
+</html>
+
