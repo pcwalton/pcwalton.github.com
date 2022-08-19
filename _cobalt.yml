@@ -6,7 +6,7 @@ template_extensions:
 ignore:
   - "slides"
 include_drafts: false
-destination: _site
+destination: site
 
 # Site options
 site:
