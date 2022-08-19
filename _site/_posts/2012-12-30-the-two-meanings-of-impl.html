@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>The Two Meanings of "impl" – pcwalton – pcwalton's blog</title>
+    <meta content='text/html; charset=utf-8' http-equiv='Content-Type'>
+<meta http-equiv='X-UA-Compatible' content='IE=edge'>
+<meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0'>
+
+
+<meta property="og:description" content="impl declarations in Rust have two forms. The subtle distinction between the two can be confusing at first, so I'll briefly explain the difference here.
+" />
+
+<meta name="author" content="pcwalton" />
+
+
+<meta property="og:title" content="The Two Meanings of "impl"" />
+<meta property="twitter:title" content="The Two Meanings of "impl"" />
+
+
+
+<meta property="og:image" content="http://pcwalton.github.com"/>
+<meta property="twitter:image" content="http://pcwalton.github.com"/>
+
+
+
+    <link rel="stylesheet" type="text/css" href="http://pcwalton.github.com/assets/style.css" />
+    <link rel="alternate" type="application/rss+xml" title="pcwalton - pcwalton's blog" href="http://pcwalton.github.com/feed.xml" />
+    <link rel="canonical" href="_posts/2012-12-30-the-two-meanings-of-impl.html" />
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.css" integrity="sha384-Xi8rHCmBmhbuyyhbI88391ZKP2dmfnOl4rT9ZfRI7mLTdk1wblIUnrIq35nqwEvC" crossorigin="anonymous">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.js" integrity="sha384-X/XCfMm41VSsqRNQgDerQczD69XqmjOOOwYQvr/uuC+j4OPoNhVgjdGFwhvN02Ja" crossorigin="anonymous"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/contrib/auto-render.min.js" integrity="sha384-+XBljXPPiv+OzfbB3cVmLHf4hdUFHlWNZN5spNQ7rmHTXpd7WvJum6fIACpNNfIR" crossorigin="anonymous"></script>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            renderMathInElement(document.body, {
+                // customised options
+                // • auto-render specific keys, e.g.:
+                delimiters: [
+                    {left: '$$$', right: '$$', display: true},
+                    {left: '$$', right: '$$', display: false},
+                    {left: '\\(', right: '\\)', display: false},
+                    {left: '\\[', right: '\\]', display: true}
+                ],
+                // • rendering keys, e.g.:
+                throwOnError : false
+            });
+        });
+    </script>
+
+    <meta name="theme-color" content="#000000">
+    <link rel="icon" type="image/png" sizes="32x32" href="http://pcwalton.github.com/images/favicon-32x32.png">
+    
+
+  </head>
+
+  <body>
+    <div id="bar"></div>
+    <div class="wrapper-container">
+      <div class="wrapper-masthead">
+        <div class="container">
+          <header class="masthead clearfix">
+            
+
+            <div class="site-info">
+              <h1 class="site-name"><a href="http://pcwalton.github.com/">pcwalton</a></h1>
+              <p class="site-description">pcwalton's blog</p> 
+            </div>
+
+            <nav>
+              <a href="http://pcwalton.github.com/">Home</a>
+            </nav>
+          </header>
+        </div>
+      </div>
+
+      <div class="wrapper-main">
+        <div id="main" role="main" class="container">
+
+<article class="post detailed">
+  <h1>The Two Meanings of "impl"</h1>
+
+  <div>
+    <p class="author_title">Patrick Walton  ·  December 30, 2012</p>
+    
+    <div class="post-tags">
+      
+        
+      
+      
+    </div>
+  </div>
+    
+  <div class="entry">
+    <p><code>impl</code> declarations in Rust have two forms. The subtle distinction between the two can be confusing at first, so I'll briefly explain the difference here.</p>
+<p>The first form of <code>impl</code> is a <em>type implementation</em>. (Earlier I was calling this an &quot;anonymous trait&quot;, but I think that this terminology is probably more confusing than it's worth.) This form allows you to define <em>new</em> functions associated with a type. For example:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#c0c5ce;">struct Dog {
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">	name: ~str
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">}
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">impl Dog {
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">	static fn new(name: ~str) -&gt; Dog {
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">		return Dog { name: name };
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">	}
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">	
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">	fn speak(&amp;self) {
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">		io::println(&quot;woof&quot;);
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">	}
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">}
+</span></pre>
+<p>This example defines new functions <code>new</code> and <code>speak</code> under the <code>Dog</code> namespace. Here's an example of their use:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#c0c5ce;">let dog = Dog::new(&quot;Snoopy&quot;);
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">Dog::speak(&amp;dog); // note: doesn&#39;t work today, see note below
+</span></pre>
+<p>(The explicit call of the form <code>Dog::speak(&amp;dog)</code> doesn't work today, but I wrote it out to emphasize the fact that <code>speak</code> lives in the <code>Dog</code> namespace. It's likely to work in the future, though. Today, you need to write <code>dog.speak()</code>.)</p>
+<p>The second form of <code>impl</code>, on the other hand, is a <em>trait implementation</em>. It's distinguished from the first form by the presence of a <code>:</code> followed by the name of a trait. This form allows you to provide an implementation for one or more <em>existing</em> functions belonging to a trait. It doesn't define any new functions. For instance, suppose I defined this trait:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#c0c5ce;">trait Animal {
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    static fn species(&amp;self) -&gt; ~str;
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">}
+</span></pre>
+<p>Then I can supply an implementation of <code>species()</code> for my <code>Dog</code> structure like this:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#c0c5ce;">impl Dog : Animal {
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    static fn species(&amp;self) -&gt; ~str {
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">        return ~&quot;Canis lupus familiaris&quot;;
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    }
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">}
+</span></pre>
+<p>The key point to notice here is that this form doesn't define any new names. This code won't compile:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#c0c5ce;">let dog = Dog::new(&quot;Fido&quot;);
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">io::println(Dog::species(&amp;dog)); // unresolved name: `species`
+</span></pre>
+<p>But this code will:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#c0c5ce;">let dog = Dog::new(&quot;Spot&quot;);
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">io::println(Animal::species(&amp;dog));
+</span></pre>
+<p>The reason is that a trait implementation only provides the implementation of one or more <em>existing</em> functions rather than defining new functions. The function <code>species</code> is part of the <code>Animal</code> trait; it's not part of <code>Dog</code>.</p>
+<p>(You might reasonably ask: Why not duplicate the name <code>species</code> into <code>Dog</code>, for convenience? The reason is because of name collisions: it should be possible to implement <code>Animal</code> and later implement another trait with a different function called <code>species</code> without breaking existing code.)</p>
+<p>So the upshot of this is that there are two forms of implementations in Rust: the type implementation, which defines new functions, and the trait implementation, which attaches functionality to existing functions. Both use the <code>impl</code> keyword, but they're different forms with different meanings.</p>
+
+  </div>
+
+  <div>
+    <p><span class="share-box">Share:</span> <a href="http://twitter.com/share?text=The Two Meanings of "impl"&url=_posts/2012-12-30-the-two-meanings-of-impl.html" target="_blank">Twitter</a>, <a href="https://www.facebook.com/sharer.php?u=_posts/2012-12-30-the-two-meanings-of-impl.html" target="_blank">Facebook</a></p>
+  </div>
+
+  <!--<div class="date">
+    Written on December 30, 2012
+  </div>-->
+</article>
+        </div>
+      </div>
+
+      <div class="wrapper-footer">
+        <div class="container">
+          <footer class="footer">
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+          </footer>
+        </div>
+      </div>
+    </div>
+
+    
+
+  </body>
+</html>
+

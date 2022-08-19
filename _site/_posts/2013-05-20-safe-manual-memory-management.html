@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Safe Manual Memory Management – pcwalton – pcwalton's blog</title>
+    <meta content='text/html; charset=utf-8' http-equiv='Content-Type'>
+<meta http-equiv='X-UA-Compatible' content='IE=edge'>
+<meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0'>
+
+
+<meta property="og:description" content="If there's one feature of Rust that is probably the most unique among languages in industry, it's safe manual memory management.
+" />
+
+<meta name="author" content="pcwalton" />
+
+
+<meta property="og:title" content="Safe Manual Memory Management" />
+<meta property="twitter:title" content="Safe Manual Memory Management" />
+
+
+
+<meta property="og:image" content="http://pcwalton.github.com"/>
+<meta property="twitter:image" content="http://pcwalton.github.com"/>
+
+
+
+    <link rel="stylesheet" type="text/css" href="http://pcwalton.github.com/assets/style.css" />
+    <link rel="alternate" type="application/rss+xml" title="pcwalton - pcwalton's blog" href="http://pcwalton.github.com/feed.xml" />
+    <link rel="canonical" href="_posts/2013-05-20-safe-manual-memory-management.html" />
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.css" integrity="sha384-Xi8rHCmBmhbuyyhbI88391ZKP2dmfnOl4rT9ZfRI7mLTdk1wblIUnrIq35nqwEvC" crossorigin="anonymous">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.js" integrity="sha384-X/XCfMm41VSsqRNQgDerQczD69XqmjOOOwYQvr/uuC+j4OPoNhVgjdGFwhvN02Ja" crossorigin="anonymous"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/contrib/auto-render.min.js" integrity="sha384-+XBljXPPiv+OzfbB3cVmLHf4hdUFHlWNZN5spNQ7rmHTXpd7WvJum6fIACpNNfIR" crossorigin="anonymous"></script>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            renderMathInElement(document.body, {
+                // customised options
+                // • auto-render specific keys, e.g.:
+                delimiters: [
+                    {left: '$$$', right: '$$', display: true},
+                    {left: '$$', right: '$$', display: false},
+                    {left: '\\(', right: '\\)', display: false},
+                    {left: '\\[', right: '\\]', display: true}
+                ],
+                // • rendering keys, e.g.:
+                throwOnError : false
+            });
+        });
+    </script>
+
+    <meta name="theme-color" content="#000000">
+    <link rel="icon" type="image/png" sizes="32x32" href="http://pcwalton.github.com/images/favicon-32x32.png">
+    
+
+  </head>
+
+  <body>
+    <div id="bar"></div>
+    <div class="wrapper-container">
+      <div class="wrapper-masthead">
+        <div class="container">
+          <header class="masthead clearfix">
+            
+
+            <div class="site-info">
+              <h1 class="site-name"><a href="http://pcwalton.github.com/">pcwalton</a></h1>
+              <p class="site-description">pcwalton's blog</p> 
+            </div>
+
+            <nav>
+              <a href="http://pcwalton.github.com/">Home</a>
+            </nav>
+          </header>
+        </div>
+      </div>
+
+      <div class="wrapper-main">
+        <div id="main" role="main" class="container">
+
+<article class="post detailed">
+  <h1>Safe Manual Memory Management</h1>
+
+  <div>
+    <p class="author_title">Patrick Walton  ·  May 20, 2013</p>
+    
+    <div class="post-tags">
+      
+        
+      
+      
+    </div>
+  </div>
+    
+  <div class="entry">
+    <p>If there's one feature of Rust that is probably the most unique among languages in industry, it's <em>safe manual memory management</em>.</p>
+<p>It's easiest to explain safe manual memory management by explaining how it differs from the memory models of other languages. There are a few different models in common use in industry languages:</p>
+<ul>
+<li>
+<p><em>Unsafe manual memory management</em>—These languages provide very fine-grained control over memory allocation; heap memory can be explicitly allocated and deallocated. The most important examples here are C and C++. The well-known downside of this approach is that memory safety violations can only be detected at runtime with a memory safety checker such as Valgrind or Address Sanitizer. Memory safety violations that go unchecked can lead to crashes at best and exploitable security vulnerabilities at worst.</p>
+</li>
+<li>
+<p><em>Full garbage collection</em>—The majority of modern languages expose a memory model that falls into this category—the space is very diverse, ranging from Java to Go to JavaScript to Ruby to Haskell. In general, such languages place all allocations into the heap instead of the stack, although escape analysis and value types may be used to reduce the number of heap allocations. Periodically, a <em>garbage collector</em> scans all pointers on the stack and in the heap, judges unreachable objects dead, and reclaims them. This approach has the advantage of <em>memory safety</em> at compile time—the language arranges for there to be no dangling pointers, wild pointers, and so forth. The downsides, however, are:</p>
+<ol>
+<li>
+<p>The garbage collector may run at an inconvenient time. This can be mitigated by explicit control over when the GC runs, although if the garbage collector must collect multiple threads' heaps at the same time, this may be difficult to synchronize. This can also be mitigated by using manual memory pooling and free lists, although pooling has undesirable safety properties—much like unsafe manual memory management, there is no static guarantee that objects allocated from a pool are returned properly or that an object is not reachable when returned to the pool. Incremental and concurrent garbage collectors help here, but they are not free, as they typically require write and/or read barriers, reducing throughput.</p>
+</li>
+<li>
+<p>When it runs, the garbage collector must mark all pointers to discover which ones are live, reducing throughput of the application. Essentially, the GC must discover at <em>runtime</em> what a C++ (say) programmer knows at <em>compile time</em>. Not much can typically be done about this cost in fully garbage-collected languages, short of falling back to unsafe manual memory management. Pools don't help much here, because the GC must still trace the pointers into the pool. Even pointers into the stack generally must be traced.</p>
+</li>
+</ol>
+</li>
+<li>
+<p><em>Garbage collection with value types and references</em>—This category includes languages like C#. (I believe D falls into this category as well, although I may be mistaken.) These languages are essentially garbage-collected, but they include <em>value types</em> which are guaranteed to be stack-allocated if in local variables. Additionally, and most importantly, they include <em>reference parameters</em> (and sometimes reference locals), which allow stack-allocated values to be temporarily aliased when calling another function. Effective use of value types can reduce marking and sweeping time. In general, this system is an effective addition to a garbage-collected system, allowing a good measure of additional control without much cost in complexity and no cost in memory safety. It is not, however, typically sufficient to write programs without using the garbage collector at all; the system is too simple to statically encode anything other than the most basic memory management patterns.</p>
+</li>
+</ul>
+<p>Where does Rust fit in? Actually, it fits into a category all to itself among industry languages (although one shared by various research languages, like Cyclone). Rust offers <em>safe manual memory management</em> (although some have objected to the term &quot;manual&quot; here). It extends the system described above as &quot;garbage collection with value types and references&quot; in two important ways:</p>
+<ol>
+<li>
+<p>You can allocate memory that will not be traced by the garbage collector, and free it manually if you choose. This is the feature of Rust known as &quot;unique pointers&quot;. Rust will automatically free memory that is uniquely owned when its owning pointer goes out of scope. It's also easy to write a function that acts exactly as <code>free</code> does, so you can precisely choose when your objects die. Unique pointers are not traced by the GC (unless they point to a type that transitively contains a garbage-collected pointer), so they are an effective way to cut down marking times.</p>
+</li>
+<li>
+<p>You can <em>return references</em> and <em>place references into data structures</em>. Like other references, these references are not traced by the garbage collector. As long as the references follow a <em>stack discipline</em>, meaning that they point to memory that was allocated by one of the callers of the current function, the compiler allows them to be placed anywhere. This adds a great deal of expressiveness over the reference parameter approach, and it enables a large number of programs to be written without using the garbage collector at all.</p>
+</li>
+</ol>
+<p>In terms of safety and performance, safe manual memory management is having your cake and eating it too. You get memory safety like a garbage-collected language, but control like that of unsafe manual memory management. But this system has its downsides as well—most importantly, complexity of implementation and interface. Learning to use references and unique pointers poses a significant learning curve. But, once the system is learned, it's remarkably flexible, with an attractive combination of performance and safety.</p>
+
+  </div>
+
+  <div>
+    <p><span class="share-box">Share:</span> <a href="http://twitter.com/share?text=Safe Manual Memory Management&url=_posts/2013-05-20-safe-manual-memory-management.html" target="_blank">Twitter</a>, <a href="https://www.facebook.com/sharer.php?u=_posts/2013-05-20-safe-manual-memory-management.html" target="_blank">Facebook</a></p>
+  </div>
+
+  <!--<div class="date">
+    Written on May 20, 2013
+  </div>-->
+</article>
+        </div>
+      </div>
+
+      <div class="wrapper-footer">
+        <div class="container">
+          <footer class="footer">
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+          </footer>
+        </div>
+      </div>
+    </div>
+
+    
+
+  </body>
+</html>
+

@@ -12,7 +12,7 @@ destination: _site
 site:
   title: "pcwalton"
   description: "pcwalton's blog"
-  base_url: ~
+  base_url: "http://pcwalton.github.com"
   sitemap: ~
   data:
     avatar: ""
