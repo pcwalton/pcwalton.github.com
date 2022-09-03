@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Introducing `cxx-async` – pcwalton – pcwalton's blog</title>
+    <meta content='text/html; charset=utf-8' http-equiv='Content-Type'>
+<meta http-equiv='X-UA-Compatible' content='IE=edge'>
+<meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0'>
+
+
+<meta property="og:description" content="I'm happy to announce a new Rust crate that I've been working on for a while at Meta: cxx-async. cxx-async is an extension to the cxx crate that allows for bidirectional interoperability between C++ coroutines and asynchronous Rust functions. With it, you can await C++ coroutines and co_await Rust functions; as much as possible, everything &quot;just works&quot;. The biggest practical benefit of C++ coroutine interoperability is elimination of awkward callback patterns when interfacing with C++. 
+" />
+
+<meta name="author" content="pcwalton" />
+
+
+<meta property="og:title" content="Introducing `cxx-async`" />
+<meta property="twitter:title" content="Introducing `cxx-async`" />
+
+
+
+<meta property="og:image" content="http://pcwalton.github.io"/>
+<meta property="twitter:image" content="http://pcwalton.github.io"/>
+
+
+
+    <link rel="stylesheet" type="text/css" href="http://pcwalton.github.io/assets/style.css" />
+    <link rel="alternate" type="application/rss+xml" title="pcwalton - pcwalton's blog" href="http://pcwalton.github.io/feed.xml" />
+    <link rel="canonical" href="_posts/2022-08-19-introducing-cxx-async.html" />
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.css" integrity="sha384-Xi8rHCmBmhbuyyhbI88391ZKP2dmfnOl4rT9ZfRI7mLTdk1wblIUnrIq35nqwEvC" crossorigin="anonymous">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.js" integrity="sha384-X/XCfMm41VSsqRNQgDerQczD69XqmjOOOwYQvr/uuC+j4OPoNhVgjdGFwhvN02Ja" crossorigin="anonymous"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/contrib/auto-render.min.js" integrity="sha384-+XBljXPPiv+OzfbB3cVmLHf4hdUFHlWNZN5spNQ7rmHTXpd7WvJum6fIACpNNfIR" crossorigin="anonymous"></script>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            renderMathInElement(document.body, {
+                // customised options
+                // • auto-render specific keys, e.g.:
+                delimiters: [
+                    {left: '$$$', right: '$$', display: true},
+                    {left: '$$', right: '$$', display: false},
+                    {left: '\\(', right: '\\)', display: false},
+                    {left: '\\[', right: '\\]', display: true}
+                ],
+                // • rendering keys, e.g.:
+                throwOnError : false
+            });
+        });
+    </script>
+
+    <meta name="theme-color" content="#000000">
+    <link rel="icon" type="image/png" sizes="32x32" href="http://pcwalton.github.io/images/favicon-32x32.png">
+    
+
+  </head>
+
+  <body>
+    <div id="bar"></div>
+    <div class="wrapper-container">
+      <div class="wrapper-masthead">
+        <div class="container">
+          <header class="masthead clearfix">
+            
+
+            <div class="site-info">
+              <h1 class="site-name"><a href="http://pcwalton.github.io/">pcwalton</a></h1>
+              <p class="site-description">pcwalton's blog</p> 
+            </div>
+
+            <nav>
+              <a href="http://pcwalton.github.io/">Home</a>
+            </nav>
+          </header>
+        </div>
+      </div>
+
+      <div class="wrapper-main">
+        <div id="main" role="main" class="container">
+
+<article class="post detailed">
+  <h1>Introducing `cxx-async`</h1>
+
+  <div>
+    <p class="author_title">Patrick Walton  ·  August 19, 2022</p>
+    
+    <div class="post-tags">
+      
+        
+      
+      
+    </div>
+  </div>
+    
+  <div class="entry">
+    <p>I'm happy to announce a new Rust crate that I've been working on for a while at Meta: <a href="https://github.com/pcwalton/cxx-async"><code>cxx-async</code></a>. <code>cxx-async</code> is an extension to the <a href="https://cxx.rs/"><code>cxx</code></a> crate that allows for bidirectional interoperability between C++ coroutines and asynchronous Rust functions. With it, you can <code>await</code> C++ coroutines and <code>co_await</code> Rust functions; as much as possible, everything &quot;just works&quot;. The biggest practical benefit of C++ coroutine interoperability is <em>elimination of awkward callback patterns when interfacing with C++</em>.</p>
+<p>Let's build a simple service to demonstrate this. Suppose we want to build a Rust service that uses the C <code>stb_image</code> and <code>stb_image_write</code> libraries to convert JPEG images to PNG<sup class="footnote-reference"><a href="#1">1</a></sup>. (Note: Don't expose the <code>stb_image</code> libraries to untrusted input in a real application, as they aren't designed to be secure. They just have a simple API that's good for demonstration.) We might use the Tokio libraries to make a service like this:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#b48ead;">use </span><span style="color:#c0c5ce;">actix_web::{get, App, HttpServer, Responder};
+</span><span style="color:#b48ead;">use </span><span style="color:#c0c5ce;">std::future::Future;
+</span><span style="color:#b48ead;">use </span><span style="color:#c0c5ce;">std::io::Result as IoResult;
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#65737e;">// The server entry point.
+</span><span style="color:#c0c5ce;">#[</span><span style="color:#bf616a;">actix_web</span><span style="color:#c0c5ce;">::</span><span style="color:#bf616a;">main</span><span style="color:#c0c5ce;">]
+</span><span style="color:#c0c5ce;">async </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">main</span><span style="color:#c0c5ce;">() -&gt; IoResult&lt;()&gt; {
+</span><span style="color:#c0c5ce;">    HttpServer::new(|| App::new().</span><span style="color:#96b5b4;">service</span><span style="color:#c0c5ce;">(convert))
+</span><span style="color:#c0c5ce;">        .</span><span style="color:#96b5b4;">bind</span><span style="color:#c0c5ce;">((&quot;</span><span style="color:#a3be8c;">127.0.0.1</span><span style="color:#c0c5ce;">&quot;, </span><span style="color:#d08770;">8765</span><span style="color:#c0c5ce;">))?
+</span><span style="color:#c0c5ce;">        .</span><span style="color:#96b5b4;">run</span><span style="color:#c0c5ce;">()
+</span><span style="color:#c0c5ce;">        .await
+</span><span style="color:#c0c5ce;">}
+</span></pre>
+<p>On the C++ side, we might wrap the <code>stb_image</code> libraries like so:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#b48ead;">#define </span><span style="color:#c0c5ce;">STB_IMAGE_WRITE_IMPLEMENTATION
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#b48ead;">#include </span><span style="color:#c0c5ce;">&quot;</span><span style="color:#a3be8c;">coroutine_example.h</span><span style="color:#c0c5ce;">&quot;
+</span><span style="color:#b48ead;">#include </span><span style="color:#c0c5ce;">&quot;</span><span style="color:#a3be8c;">stb_image.h</span><span style="color:#c0c5ce;">&quot;
+</span><span style="color:#b48ead;">#include </span><span style="color:#c0c5ce;">&quot;</span><span style="color:#a3be8c;">stb_image_write.h</span><span style="color:#c0c5ce;">&quot;
+</span><span style="color:#b48ead;">#include </span><span style="color:#c0c5ce;">&lt;</span><span style="color:#a3be8c;">cstdint</span><span style="color:#c0c5ce;">&gt;
+</span><span style="color:#b48ead;">#include </span><span style="color:#c0c5ce;">&lt;</span><span style="color:#a3be8c;">sys/types.h</span><span style="color:#c0c5ce;">&gt;
+</span><span style="color:#b48ead;">#include </span><span style="color:#c0c5ce;">&lt;</span><span style="color:#a3be8c;">sys/uio.h</span><span style="color:#c0c5ce;">&gt;
+</span><span style="color:#b48ead;">#include </span><span style="color:#c0c5ce;">&lt;</span><span style="color:#a3be8c;">unistd.h</span><span style="color:#c0c5ce;">&gt;
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#65737e;">// Synchronously reencodes a JPEG to PNG.
+</span><span style="color:#c0c5ce;">rust::Vec&lt;uint8_t&gt; </span><span style="color:#8fa1b3;">reencode_jpeg</span><span style="color:#c0c5ce;">(rust::Slice&lt;</span><span style="color:#b48ead;">const </span><span style="color:#c0c5ce;">uint8_t&gt; </span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">)
+</span><span style="color:#c0c5ce;">{
+</span><span style="color:#c0c5ce;">    </span><span style="color:#65737e;">// Load the JPEG image.
+</span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">int</span><span style="color:#c0c5ce;"> width, height, channels;
+</span><span style="color:#c0c5ce;">    uint8_t *pixels = </span><span style="color:#8fa1b3;">stbi_load_from_memory</span><span style="color:#c0c5ce;">(
+</span><span style="color:#c0c5ce;">        jpeg_data.</span><span style="color:#8fa1b3;">data</span><span style="color:#c0c5ce;">(), jpeg_data.</span><span style="color:#8fa1b3;">size</span><span style="color:#c0c5ce;">(), &amp;width, &amp;height, &amp;channels, </span><span style="color:#d08770;">4</span><span style="color:#c0c5ce;">);
+</span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">if </span><span style="color:#c0c5ce;">(pixels == </span><span style="color:#d08770;">nullptr</span><span style="color:#c0c5ce;">)
+</span><span style="color:#c0c5ce;">        </span><span style="color:#b48ead;">throw </span><span style="color:#8fa1b3;">std::runtime_error</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">Failed to load image!</span><span style="color:#c0c5ce;">&quot;);
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    </span><span style="color:#65737e;">// Write the PNG to a temporary file.
+</span><span style="color:#c0c5ce;">    </span><span style="color:#65737e;">// `stb_image_write` doesn&#39;t support writing directly to an in-memory buffer, so we have to go
+</span><span style="color:#c0c5ce;">    </span><span style="color:#65737e;">// through a file first.
+</span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">char</span><span style="color:#c0c5ce;"> tmpPath[</span><span style="color:#d08770;">32</span><span style="color:#c0c5ce;">] = &quot;</span><span style="color:#a3be8c;">/tmp/imageXXXXXX</span><span style="color:#c0c5ce;">&quot;;
+</span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">int</span><span style="color:#c0c5ce;"> fd = </span><span style="color:#8fa1b3;">mkstemp</span><span style="color:#c0c5ce;">(tmpPath);
+</span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">if </span><span style="color:#c0c5ce;">(fd &lt; </span><span style="color:#d08770;">0</span><span style="color:#c0c5ce;">)
+</span><span style="color:#c0c5ce;">        </span><span style="color:#b48ead;">throw </span><span style="color:#8fa1b3;">std::runtime_error</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">Couldn&#39;t create temporary file!</span><span style="color:#c0c5ce;">&quot;);
+</span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">int</span><span style="color:#c0c5ce;"> ok = </span><span style="color:#8fa1b3;">stbi_write_png</span><span style="color:#c0c5ce;">(tmpPath, width, height, </span><span style="color:#d08770;">4</span><span style="color:#c0c5ce;">, pixels, width * </span><span style="color:#d08770;">4</span><span style="color:#c0c5ce;">);
+</span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">if </span><span style="color:#c0c5ce;">(ok == </span><span style="color:#d08770;">0</span><span style="color:#c0c5ce;">)
+</span><span style="color:#c0c5ce;">        </span><span style="color:#b48ead;">throw </span><span style="color:#8fa1b3;">std::runtime_error</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">Couldn&#39;t reencode image!</span><span style="color:#c0c5ce;">&quot;);
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    </span><span style="color:#65737e;">// Read that temporary file back to memory.
+</span><span style="color:#c0c5ce;">    rust::Vec&lt;uint8_t&gt; encodedPNG;
+</span><span style="color:#c0c5ce;">    uint8_t buffer[</span><span style="color:#d08770;">4096</span><span style="color:#c0c5ce;">];
+</span><span style="color:#c0c5ce;">    size_t nRead;
+</span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">while </span><span style="color:#c0c5ce;">((nRead = </span><span style="color:#8fa1b3;">read</span><span style="color:#c0c5ce;">(fd, buffer, sizeof(buffer))) &gt; </span><span style="color:#d08770;">0</span><span style="color:#c0c5ce;">)
+</span><span style="color:#c0c5ce;">        </span><span style="color:#8fa1b3;">std::copy</span><span style="color:#c0c5ce;">(&amp;buffer[</span><span style="color:#d08770;">0</span><span style="color:#c0c5ce;">], &amp;buffer[nRead], </span><span style="color:#8fa1b3;">std::back_inserter</span><span style="color:#c0c5ce;">(encodedPNG));
+</span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">if </span><span style="color:#c0c5ce;">(nRead &lt; </span><span style="color:#d08770;">0</span><span style="color:#c0c5ce;">)
+</span><span style="color:#c0c5ce;">        </span><span style="color:#b48ead;">throw </span><span style="color:#8fa1b3;">std::runtime_error</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">Failed to reread written image file to memory!</span><span style="color:#c0c5ce;">&quot;);
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    </span><span style="color:#65737e;">// Clean up and return the decoded PNG to Rust.
+</span><span style="color:#c0c5ce;">    </span><span style="color:#8fa1b3;">close</span><span style="color:#c0c5ce;">(fd);
+</span><span style="color:#c0c5ce;">    </span><span style="color:#8fa1b3;">unlink</span><span style="color:#c0c5ce;">(tmpPath);
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">return</span><span style="color:#c0c5ce;"> encodedPNG;
+</span><span style="color:#c0c5ce;">}
+</span></pre>
+<p>And then declare the <code>cxx</code> bridge to connect the Rust and C++ together:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#c0c5ce;">#[</span><span style="color:#bf616a;">cxx</span><span style="color:#c0c5ce;">::</span><span style="color:#bf616a;">bridge</span><span style="color:#c0c5ce;">]
+</span><span style="color:#b48ead;">mod </span><span style="color:#c0c5ce;">ffi {
+</span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">unsafe extern </span><span style="color:#c0c5ce;">&quot;</span><span style="color:#a3be8c;">C++</span><span style="color:#c0c5ce;">&quot; {
+</span><span style="color:#c0c5ce;">        include!(&quot;</span><span style="color:#a3be8c;">coroutine_example.h</span><span style="color:#c0c5ce;">&quot;);
+</span><span style="color:#c0c5ce;">        </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">reencode_jpeg</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">: &amp;[</span><span style="color:#b48ead;">u8</span><span style="color:#c0c5ce;">]) -&gt; Vec&lt;</span><span style="color:#b48ead;">u8</span><span style="color:#c0c5ce;">&gt;;
+</span><span style="color:#c0c5ce;">    }
+</span><span style="color:#c0c5ce;">}
+</span></pre>
+<p>And the REST service endpoint:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#c0c5ce;">#[</span><span style="color:#bf616a;">post</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">/convert</span><span style="color:#c0c5ce;">&quot;)]
+</span><span style="color:#c0c5ce;">async </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">convert</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">: Bytes) -&gt; impl Responder {
+</span><span style="color:#c0c5ce;">    ffi::reencode_jpeg(&amp;jpeg_data)
+</span><span style="color:#c0c5ce;">}
+</span></pre>
+<p>After starting the server with <code>cargo run</code>, we can verify that this all works:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#8fa1b3;">$</span><span style="color:#c0c5ce;"> curl</span><span style="color:#bf616a;"> --data-binary</span><span style="color:#c0c5ce;"> @ferris.jpg</span><span style="color:#bf616a;"> -H </span><span style="color:#c0c5ce;">&quot;</span><span style="color:#a3be8c;">Content-Type: image/jpeg</span><span style="color:#c0c5ce;">&quot;</span><span style="color:#bf616a;"> --output</span><span style="color:#c0c5ce;"> out.png http://127.0.0.1:8765/convert
+</span><span style="color:#8fa1b3;">$</span><span style="color:#c0c5ce;"> file out.png
+</span><span style="color:#8fa1b3;">out.png:</span><span style="color:#c0c5ce;"> PNG image data, 275 x 183, 8-bit/color RGBA, non-interlaced
+</span></pre>
+<p>So we have a working service, but it has scalability problems. We're doing the one thing you should never do when working with async I/O: blocking the event loop with a long-running computation. Let's use a thread pool on the C++ side<sup class="footnote-reference"><a href="#1">1</a></sup> to fix this problem. Using the <a href="https://www.boost.org/doc/libs/1_80_0/doc/html/boost_asio/reference/thread_pool.html"><code>boost::asio::thread_pool</code> type</a> from Boost, we can rewrite the C++ side to look like this:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#c0c5ce;">...
+</span><span style="color:#b48ead;">#include </span><span style="color:#c0c5ce;">&lt;</span><span style="color:#a3be8c;">boost/asio/post.hpp</span><span style="color:#c0c5ce;">&gt;
+</span><span style="color:#b48ead;">#include </span><span style="color:#c0c5ce;">&lt;</span><span style="color:#a3be8c;">boost/asio/thread_pool.hpp</span><span style="color:#c0c5ce;">&gt;
+</span><span style="color:#c0c5ce;">...
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">boost::asio::thread_pool </span><span style="color:#8fa1b3;">g_thread_pool</span><span style="color:#c0c5ce;">(</span><span style="color:#d08770;">8</span><span style="color:#c0c5ce;">);
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">rust::Vec&lt;uint8_t&gt; </span><span style="color:#8fa1b3;">reencode_jpeg</span><span style="color:#c0c5ce;">(rust::Slice&lt;</span><span style="color:#b48ead;">const </span><span style="color:#c0c5ce;">uint8_t&gt; </span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">)
+</span><span style="color:#c0c5ce;">{
+</span><span style="color:#c0c5ce;">    ...
+</span><span style="color:#c0c5ce;">}
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#65737e;">// Asynchronously reencodes a JPEG to PNG via a thread pool.
+</span><span style="color:#b48ead;">void </span><span style="color:#8fa1b3;">reencode_jpeg_async</span><span style="color:#c0c5ce;">(rust::Slice&lt;</span><span style="color:#b48ead;">const </span><span style="color:#c0c5ce;">uint8_t&gt; </span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">)
+</span><span style="color:#c0c5ce;">{
+</span><span style="color:#c0c5ce;">    </span><span style="color:#8fa1b3;">boost::asio::post</span><span style="color:#c0c5ce;">(g_thread_pool, [=]() { </span><span style="color:#8fa1b3;">reencode_jpeg</span><span style="color:#c0c5ce;">(jpeg_data); });
+</span><span style="color:#c0c5ce;">}
+</span></pre>
+<p>But now we have a problem: how do we get the data back from the <code>reencode_jpeg</code> function? We don't want to block on retrieving the results from the thread pool, as that would keep blocking our Tokio event loop. What we need is a way to return to the event loop while the conversion process runs and subsequently to enqueue a task to send the results back to the client. Traditionally, we'd use a callback for this. On the C++ side:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#b48ead;">void </span><span style="color:#8fa1b3;">reencode_jpeg</span><span style="color:#c0c5ce;">(
+</span><span style="color:#c0c5ce;">    rust::Slice&lt;</span><span style="color:#b48ead;">const </span><span style="color:#c0c5ce;">uint8_t&gt; </span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">,
+</span><span style="color:#c0c5ce;">    rust::Fn&lt;</span><span style="color:#b48ead;">void</span><span style="color:#c0c5ce;">(rust::Box&lt;CallbackContext&gt;, rust::Vec&lt;uint8_t&gt;)&gt; </span><span style="color:#bf616a;">callback</span><span style="color:#c0c5ce;">,
+</span><span style="color:#c0c5ce;">    rust::Box&lt;CallbackContext&gt; </span><span style="color:#bf616a;">context</span><span style="color:#c0c5ce;">)
+</span><span style="color:#c0c5ce;">{
+</span><span style="color:#c0c5ce;">    ...
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    </span><span style="color:#8fa1b3;">callback</span><span style="color:#c0c5ce;">(</span><span style="color:#8fa1b3;">std::move</span><span style="color:#c0c5ce;">(context), </span><span style="color:#8fa1b3;">std::move</span><span style="color:#c0c5ce;">(encodedPNG));
+</span><span style="color:#c0c5ce;">}
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#65737e;">// Asynchronously reencodes a JPEG to PNG via a thread pool.
+</span><span style="color:#b48ead;">void </span><span style="color:#8fa1b3;">reencode_jpeg_async</span><span style="color:#c0c5ce;">(
+</span><span style="color:#c0c5ce;">    rust::Slice&lt;</span><span style="color:#b48ead;">const </span><span style="color:#c0c5ce;">uint8_t&gt; </span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">,
+</span><span style="color:#c0c5ce;">    rust::Fn&lt;</span><span style="color:#b48ead;">void</span><span style="color:#c0c5ce;">(rust::Box&lt;CallbackContext&gt;, rust::Vec&lt;uint8_t&gt;)&gt; </span><span style="color:#bf616a;">callback</span><span style="color:#c0c5ce;">,
+</span><span style="color:#c0c5ce;">    rust::Box&lt;CallbackContext&gt; </span><span style="color:#bf616a;">context</span><span style="color:#c0c5ce;">)
+</span><span style="color:#c0c5ce;">{
+</span><span style="color:#c0c5ce;">    </span><span style="color:#8fa1b3;">boost::asio::post</span><span style="color:#c0c5ce;">(g_thread_pool, [
+</span><span style="color:#c0c5ce;">        jpeg_data,
+</span><span style="color:#c0c5ce;">        callback = </span><span style="color:#8fa1b3;">std::move</span><span style="color:#c0c5ce;">(callback),
+</span><span style="color:#c0c5ce;">        context = </span><span style="color:#8fa1b3;">std::move</span><span style="color:#c0c5ce;">(context)
+</span><span style="color:#c0c5ce;">    ]() </span><span style="color:#b48ead;">mutable </span><span style="color:#c0c5ce;">{
+</span><span style="color:#c0c5ce;">        </span><span style="color:#8fa1b3;">reencode_jpeg</span><span style="color:#c0c5ce;">(jpeg_data, </span><span style="color:#8fa1b3;">std::move</span><span style="color:#c0c5ce;">(callback), </span><span style="color:#8fa1b3;">std::move</span><span style="color:#c0c5ce;">(context));
+</span><span style="color:#c0c5ce;">    });
+</span><span style="color:#c0c5ce;">}
+</span></pre>
+<p>And on the Rust side:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#65737e;">// The `cxx` bridge that declares the asynchronous function we want to call.
+</span><span style="color:#c0c5ce;">#[</span><span style="color:#bf616a;">cxx</span><span style="color:#c0c5ce;">::</span><span style="color:#bf616a;">bridge</span><span style="color:#c0c5ce;">]
+</span><span style="color:#b48ead;">mod </span><span style="color:#c0c5ce;">ffi {
+</span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">extern </span><span style="color:#c0c5ce;">&quot;</span><span style="color:#a3be8c;">Rust</span><span style="color:#c0c5ce;">&quot; {
+</span><span style="color:#c0c5ce;">        </span><span style="color:#b48ead;">type </span><span style="color:#c0c5ce;">CallbackContext;
+</span><span style="color:#c0c5ce;">    }
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">unsafe extern </span><span style="color:#c0c5ce;">&quot;</span><span style="color:#a3be8c;">C++</span><span style="color:#c0c5ce;">&quot; {
+</span><span style="color:#c0c5ce;">        include!(&quot;</span><span style="color:#a3be8c;">coroutine_example.h</span><span style="color:#c0c5ce;">&quot;);
+</span><span style="color:#c0c5ce;">        </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">reencode_jpeg_async</span><span style="color:#c0c5ce;">(
+</span><span style="color:#c0c5ce;">            </span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">: &amp;[</span><span style="color:#b48ead;">u8</span><span style="color:#c0c5ce;">],
+</span><span style="color:#c0c5ce;">            </span><span style="color:#bf616a;">callback</span><span style="color:#c0c5ce;">: </span><span style="color:#b48ead;">fn</span><span style="color:#c0c5ce;">(Box&lt;CallbackContext&gt;, result: Vec&lt;</span><span style="color:#b48ead;">u8</span><span style="color:#c0c5ce;">&gt;),
+</span><span style="color:#c0c5ce;">            </span><span style="color:#bf616a;">context</span><span style="color:#c0c5ce;">: Box&lt;CallbackContext&gt;,
+</span><span style="color:#c0c5ce;">        );
+</span><span style="color:#c0c5ce;">    }
+</span><span style="color:#c0c5ce;">}
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#b48ead;">pub struct </span><span style="color:#c0c5ce;">CallbackContext(Sender&lt;Vec&lt;</span><span style="color:#b48ead;">u8</span><span style="color:#c0c5ce;">&gt;&gt;);
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#65737e;">// Our REST endpoint, which calls the asynchronous C++ function.
+</span><span style="color:#c0c5ce;">#[</span><span style="color:#bf616a;">post</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">/convert</span><span style="color:#c0c5ce;">&quot;)]
+</span><span style="color:#c0c5ce;">async </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">convert</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">: Bytes) -&gt; impl Responder {
+</span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">let </span><span style="color:#c0c5ce;">(sender, receiver) = oneshot::channel();
+</span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">let</span><span style="color:#c0c5ce;"> context = Box::new(CallbackContext(sender));
+</span><span style="color:#c0c5ce;">    ffi::reencode_jpeg_async(
+</span><span style="color:#c0c5ce;">        &amp;jpeg_data,
+</span><span style="color:#c0c5ce;">        |</span><span style="color:#bf616a;">context</span><span style="color:#c0c5ce;">, </span><span style="color:#bf616a;">encoded</span><span style="color:#c0c5ce;">| </span><span style="color:#96b5b4;">drop</span><span style="color:#c0c5ce;">(context.</span><span style="color:#d08770;">0.</span><span style="color:#96b5b4;">send</span><span style="color:#c0c5ce;">(encoded)),
+</span><span style="color:#c0c5ce;">        context,
+</span><span style="color:#c0c5ce;">    );
+</span><span style="color:#c0c5ce;">    receiver.await.</span><span style="color:#96b5b4;">unwrap</span><span style="color:#c0c5ce;">()
+</span><span style="color:#c0c5ce;">}
+</span></pre>
+<p>What a mess! We've replaced an elegant service with callback spaghetti and boilerplate. Surely there must be a better way.</p>
+<p>It turns out that now there is, with <code>cxx-async</code>. We can upgrade our C++ code to C++20 and use the coroutines feature to dramatically reduce the boilerplate. First, we replace Boost with the thread pool from <a href="https://github.com/facebook/folly">Folly</a>:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#c0c5ce;">...
+</span><span style="color:#b48ead;">#include </span><span style="color:#c0c5ce;">&lt;</span><span style="color:#a3be8c;">folly/Executor.h</span><span style="color:#c0c5ce;">&gt;
+</span><span style="color:#b48ead;">#include </span><span style="color:#c0c5ce;">&lt;</span><span style="color:#a3be8c;">folly/executors/CPUThreadPoolExecutor.h</span><span style="color:#c0c5ce;">&gt;
+</span><span style="color:#c0c5ce;">...
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">folly::Executor::KeepAlive&lt;folly::CPUThreadPoolExecutor&gt; </span><span style="color:#8fa1b3;">g_thread_pool</span><span style="color:#c0c5ce;">(
+</span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">new </span><span style="color:#8fa1b3;">folly::CPUThreadPoolExecutor</span><span style="color:#c0c5ce;">(</span><span style="color:#d08770;">8</span><span style="color:#c0c5ce;">));
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#b48ead;">auto </span><span style="color:#8fa1b3;">reencode_jpeg</span><span style="color:#c0c5ce;">(rust::Slice&lt;</span><span style="color:#b48ead;">const </span><span style="color:#c0c5ce;">uint8_t&gt; </span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">)
+</span><span style="color:#c0c5ce;">{
+</span><span style="color:#c0c5ce;">    ...
+</span><span style="color:#c0c5ce;">}
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#65737e;">// Asynchronously reencodes a JPEG to PNG via a thread pool.
+</span><span style="color:#c0c5ce;">RustFutureVecU8 </span><span style="color:#8fa1b3;">reencode_jpeg_async</span><span style="color:#c0c5ce;">(rust::Slice&lt;</span><span style="color:#b48ead;">const </span><span style="color:#c0c5ce;">uint8_t&gt; </span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">)
+</span><span style="color:#c0c5ce;">{
+</span><span style="color:#c0c5ce;">    </span><span style="color:#8fa1b3;">reencode_jpeg</span><span style="color:#c0c5ce;">(</span><span style="color:#8fa1b3;">std::move</span><span style="color:#c0c5ce;">(jpeg_data)).</span><span style="color:#8fa1b3;">semi</span><span style="color:#c0c5ce;">().</span><span style="color:#8fa1b3;">via</span><span style="color:#c0c5ce;">(g_thread_pool);
+</span><span style="color:#c0c5ce;">}
+</span></pre>
+<p>(We could equally well have used <a href="https://github.com/lewissbaker/cppcoro">CppCoro</a>, or another lightweight package, instead of Folly; we just need some C++ library that exposes thread pool work items as <code>co_await</code>able tasks. Folly was chosen for this example because it's the most popular coroutine library of this writing.)</p>
+<p>Now we modify our C++ functions to be coroutines instead of taking callbacks:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#b48ead;">#define </span><span style="color:#c0c5ce;">FOLLY_HAS_COROUTINES </span><span style="color:#d08770;">1
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">...
+</span><span style="color:#b48ead;">#include </span><span style="color:#c0c5ce;">&lt;</span><span style="color:#a3be8c;">folly/experimental/coro/Task.h</span><span style="color:#c0c5ce;">&gt;
+</span><span style="color:#c0c5ce;">...
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">folly::coro::Task&lt;rust::Vec&lt;uint8_t&gt;&gt; </span><span style="color:#8fa1b3;">reencode_jpeg</span><span style="color:#c0c5ce;">(rust::Slice&lt;</span><span style="color:#b48ead;">const </span><span style="color:#c0c5ce;">uint8_t&gt; </span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">)
+</span><span style="color:#c0c5ce;">{
+</span><span style="color:#c0c5ce;">    ...
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#c0c5ce;">    co_return encodedPNG;
+</span><span style="color:#c0c5ce;">}
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#65737e;">// Asynchronously reencodes a JPEG to PNG via a thread pool.
+</span><span style="color:#c0c5ce;">RustFutureVecU8 </span><span style="color:#8fa1b3;">reencode_jpeg_async</span><span style="color:#c0c5ce;">(rust::Slice&lt;</span><span style="color:#b48ead;">const </span><span style="color:#c0c5ce;">uint8_t&gt; </span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">)
+</span><span style="color:#c0c5ce;">{
+</span><span style="color:#c0c5ce;">    co_return co_await </span><span style="color:#8fa1b3;">reencode_jpeg</span><span style="color:#c0c5ce;">(</span><span style="color:#8fa1b3;">std::move</span><span style="color:#c0c5ce;">(jpeg_data)).</span><span style="color:#8fa1b3;">semi</span><span style="color:#c0c5ce;">().</span><span style="color:#8fa1b3;">via</span><span style="color:#c0c5ce;">(g_thread_pool);
+</span><span style="color:#c0c5ce;">}
+</span><span style="color:#c0c5ce;">
+</span></pre>
+<p>In Rust, we write a <code>cxx_async::bridge</code> declaration and modify the <code>cxx::bridge</code> declaration like this:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#65737e;">// The `cxx` bridge that declares the asynchronous function we want to call.
+</span><span style="color:#c0c5ce;">#[</span><span style="color:#bf616a;">cxx</span><span style="color:#c0c5ce;">::</span><span style="color:#bf616a;">bridge</span><span style="color:#c0c5ce;">]
+</span><span style="color:#b48ead;">mod </span><span style="color:#c0c5ce;">ffi {
+</span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">unsafe extern </span><span style="color:#c0c5ce;">&quot;</span><span style="color:#a3be8c;">C++</span><span style="color:#c0c5ce;">&quot; {
+</span><span style="color:#c0c5ce;">        include!(&quot;</span><span style="color:#a3be8c;">coroutine_example.h</span><span style="color:#c0c5ce;">&quot;);
+</span><span style="color:#c0c5ce;">        </span><span style="color:#b48ead;">type </span><span style="color:#c0c5ce;">RustFutureVecU8 = </span><span style="color:#b48ead;">crate</span><span style="color:#c0c5ce;">::RustFutureVecU8;
+</span><span style="color:#c0c5ce;">        </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">reencode_jpeg_async</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">: &amp;[</span><span style="color:#b48ead;">u8</span><span style="color:#c0c5ce;">]) -&gt; RustFutureVecU8;
+</span><span style="color:#c0c5ce;">    }
+</span><span style="color:#c0c5ce;">}
+</span><span style="color:#c0c5ce;">
+</span><span style="color:#65737e;">// The `cxx_async` bridge that defines the future we want to return.
+</span><span style="color:#c0c5ce;">#[</span><span style="color:#bf616a;">cxx_async</span><span style="color:#c0c5ce;">::</span><span style="color:#bf616a;">bridge</span><span style="color:#c0c5ce;">]
+</span><span style="color:#b48ead;">unsafe impl </span><span style="color:#c0c5ce;">Future </span><span style="color:#b48ead;">for </span><span style="color:#c0c5ce;">RustFutureVecU8 {
+</span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">type </span><span style="color:#c0c5ce;">Output = Vec&lt;</span><span style="color:#b48ead;">u8</span><span style="color:#c0c5ce;">&gt;;
+</span><span style="color:#c0c5ce;">}
+</span><span style="color:#c0c5ce;">
+</span></pre>
+<p>And inside the service endpoint, all the callbacks disappear:</p>
+<pre style="background-color:#2b303b;">
+<span style="color:#65737e;">// Our REST endpoint, which calls the C++ coroutine.
+</span><span style="color:#c0c5ce;">#[</span><span style="color:#bf616a;">post</span><span style="color:#c0c5ce;">(&quot;</span><span style="color:#a3be8c;">/convert</span><span style="color:#c0c5ce;">&quot;)]
+</span><span style="color:#c0c5ce;">async </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">convert</span><span style="color:#c0c5ce;">(</span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">: Bytes) -&gt; impl Responder {
+</span><span style="color:#c0c5ce;">    ffi::reencode_jpeg_async(&amp;jpeg_data).await.</span><span style="color:#96b5b4;">unwrap</span><span style="color:#c0c5ce;">()
+</span><span style="color:#c0c5ce;">}
+</span></pre>
+<p>Notice how much nicer this is. We can keep the straight-line code that async Rust allows us to write, even across language boundaries. Additionally, the Rust code doesn't have to know about Folly, and the C++ code doesn't have to know about Tokio: <code>cxx-async</code> is generic over Rust coroutine libraries. Even if you aren't using C++ coroutines today, it may be worth introducing them to your project just to eliminate callbacks: there is no other solution I'm aware of that allows for callback-free async interoperability between languages.</p>
+<p>The complete worked example can be found <a href="https://github.com/pcwalton/cxx-async-example/">on GitHub</a>. For comparison, the bad blocking version can be found in the <a href="https://github.com/pcwalton/cxx-async-example/tree/blocking"><code>blocking</code></a> branch, while the callback-based version is in the <a href="https://github.com/pcwalton/cxx-async-example/tree/callback-soup"><code>callback-soup</code></a> branch.</p>
+<p>As noted before, <code>cxx-async</code> supports both CppCoro and Folly; <a href="https://github.com/pcwalton/cxx-async/tree/main/examples/cppcoro">an example for CppCoro can be found here</a>, and <a href="https://github.com/pcwalton/cxx-async/tree/main/examples/folly">here is an example for Folly</a>. If you're using another C++ coroutine library, you can add support for it to <code>cxx-async</code> using the same mechanisms. In both frameworks, asynchronous Rust code can call C++ coroutines, and C++ coroutines can <code>co_await</code> asynchronous Rust. Extra effort has been expended to ensure that Folly semifutures can run directly on Rust executors without the overhead of having to create a separate executor on the C++ side; in theory, this can make asynchronous Folly code <em>faster</em> than the equivalent code using callbacks.</p>
+<p>The <code>cxx-async</code> crate is available on <a href="https://crates.io/crates/cxx-async">crates.io</a>. Please feel free to try it out, report feedback, report issues, and send pull requests! Integration with <code>cxx</code> is a possibility in the future as <code>cxx-async</code> stabilizes and matures.</p>
+<div class="footnote-definition" id="1"><sup class="footnote-definition-label">1</sup>
+<p>In this <em>particular</em> toy example, we could instead dispatch to a thread pool on the Rust side and avoid the need to use <code>cxx-async</code>. But this doesn't work for C++ libraries that use coroutines internally.</p>
+</div>
+
+  </div>
+
+  <div>
+    <p><span class="share-box">Share:</span> <a href="http://twitter.com/share?text=Introducing `cxx-async`&url=_posts/2022-08-19-introducing-cxx-async.html" target="_blank">Twitter</a>, <a href="https://www.facebook.com/sharer.php?u=_posts/2022-08-19-introducing-cxx-async.html" target="_blank">Facebook</a></p>
+  </div>
+
+  <!--<div class="date">
+    Written on August 19, 2022
+  </div>-->
+</article>
+        </div>
+      </div>
+
+      <div class="wrapper-footer">
+        <div class="container">
+          <footer class="footer">
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+          </footer>
+        </div>
+      </div>
+    </div>
+
+    
+
+  </body>
+</html>
+

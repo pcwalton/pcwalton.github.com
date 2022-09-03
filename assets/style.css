@@ -51,9 +51,29 @@ table {
   box-sizing: border-box; }
 
 /* pcwalton-specific stuff */
-code, tt {
+code, tt, pre {
   font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",  "Courier New", monospace !important;
   color: #555 !important; }
+
+pre {
+  overflow: scroll;
+  padding: 12px;
+  font-size: smaller; }
+
+.footnote-reference, .footnote-definition-label {
+  font-size: small; }
+
+.footnote-reference {
+  position: relative;
+  top: -1em; }
+
+.footnote-definition-label {
+  float: left;
+  margin-right: 6px; }
+
+.entry p {
+  text-align: justify;
+  hyphens: auto; }
 
 /**************/
 /* BASE RULES */
