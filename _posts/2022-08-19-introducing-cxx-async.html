@@ -207,7 +207,7 @@
 <p>But now we have a problem: how do we get the data back from the <code>reencode_jpeg</code> function? We don't want to block on retrieving the results from the thread pool, as that would keep blocking our Tokio event loop. What we need is a way to return to the event loop while the conversion process runs and subsequently to enqueue a task to send the results back to the client. Traditionally, we'd use a callback for this. On the C++ side:</p>
 <pre style="background-color:#2b303b;">
 <span style="color:#b48ead;">void </span><span style="color:#8fa1b3;">reencode_jpeg</span><span style="color:#c0c5ce;">(
-</span><span style="color:#c0c5ce;">    rust::Slice&lt;</span><span style="color:#b48ead;">const </span><span style="color:#c0c5ce;">uint8_t&gt; </span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">,
+</span><span style="color:#c0c5ce;">    std::vector&lt;</span><span style="color:#b48ead;">const </span><span style="color:#c0c5ce;">uint8_t&gt; </span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">,
 </span><span style="color:#c0c5ce;">    rust::Fn&lt;</span><span style="color:#b48ead;">void</span><span style="color:#c0c5ce;">(rust::Box&lt;CallbackContext&gt;, rust::Vec&lt;uint8_t&gt;)&gt; </span><span style="color:#bf616a;">callback</span><span style="color:#c0c5ce;">,
 </span><span style="color:#c0c5ce;">    rust::Box&lt;CallbackContext&gt; </span><span style="color:#bf616a;">context</span><span style="color:#c0c5ce;">)
 </span><span style="color:#c0c5ce;">{
@@ -218,7 +218,7 @@
 </span><span style="color:#c0c5ce;">
 </span><span style="color:#65737e;">// Asynchronously reencodes a JPEG to PNG via a thread pool.
 </span><span style="color:#b48ead;">void </span><span style="color:#8fa1b3;">reencode_jpeg_async</span><span style="color:#c0c5ce;">(
-</span><span style="color:#c0c5ce;">    std::vector&lt;</span><span style="color:#b48ead;">const </span><span style="color:#c0c5ce;">uint8_t&gt; </span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">,
+</span><span style="color:#c0c5ce;">    rust::Slice&lt;</span><span style="color:#b48ead;">const </span><span style="color:#c0c5ce;">uint8_t&gt; </span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">,
 </span><span style="color:#c0c5ce;">    rust::Fn&lt;</span><span style="color:#b48ead;">void</span><span style="color:#c0c5ce;">(rust::Box&lt;CallbackContext&gt;, rust::Vec&lt;uint8_t&gt;)&gt; </span><span style="color:#bf616a;">callback</span><span style="color:#c0c5ce;">,
 </span><span style="color:#c0c5ce;">    rust::Box&lt;CallbackContext&gt; </span><span style="color:#bf616a;">context</span><span style="color:#c0c5ce;">)
 </span><span style="color:#c0c5ce;">{
