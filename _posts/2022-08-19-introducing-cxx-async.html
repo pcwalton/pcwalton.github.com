@@ -92,7 +92,8 @@
   </div>
     
   <div class="entry">
-    <p>I'm happy to announce a new Rust crate that I've been working on for a while at Meta: <a href="https://github.com/pcwalton/cxx-async"><code>cxx-async</code></a>. <code>cxx-async</code> is an extension to the <a href="https://cxx.rs/"><code>cxx</code></a> crate that allows for bidirectional interoperability between C++ coroutines and asynchronous Rust functions. With it, you can <code>await</code> C++ coroutines and <code>co_await</code> Rust functions; as much as possible, everything &quot;just works&quot;. The biggest practical benefit of C++ coroutine interoperability is <em>elimination of awkward callback patterns when interfacing with C++</em>.</p>
+    <p><em>Update 9/6/2022: Fixed a potential use-after-free on the C++ side if the future got dropped. Thanks to David Tolnay for pointing this out.</em></p>
+<p>I'm happy to announce a new Rust crate that I've been working on for a while at Meta: <a href="https://github.com/pcwalton/cxx-async"><code>cxx-async</code></a>. <code>cxx-async</code> is an extension to the <a href="https://cxx.rs/"><code>cxx</code></a> crate that allows for bidirectional interoperability between C++ coroutines and asynchronous Rust functions. With it, you can <code>await</code> C++ coroutines and <code>co_await</code> Rust functions; as much as possible, everything &quot;just works&quot;. The biggest practical benefit of C++ coroutine interoperability is <em>elimination of awkward callback patterns when interfacing with C++</em>.</p>
 <p>Let's build a simple service to demonstrate this. Suppose we want to build a Rust service that uses the C <code>stb_image</code> and <code>stb_image_write</code> libraries to convert JPEG images to PNG<sup class="footnote-reference"><a href="#1">1</a></sup>. (Note: Don't expose the <code>stb_image</code> libraries to untrusted input in a real application, as they aren't designed to be secure. They just have a simple API that's good for demonstration.) We might use the Tokio libraries to make a service like this:</p>
 <pre style="background-color:#2b303b;">
 <span style="color:#b48ead;">use </span><span style="color:#c0c5ce;">actix_web::{get, App, HttpServer, Responder};
@@ -189,7 +190,7 @@
 </span><span style="color:#c0c5ce;">
 </span><span style="color:#c0c5ce;">boost::asio::thread_pool </span><span style="color:#8fa1b3;">g_thread_pool</span><span style="color:#c0c5ce;">(</span><span style="color:#d08770;">8</span><span style="color:#c0c5ce;">);
 </span><span style="color:#c0c5ce;">
-</span><span style="color:#c0c5ce;">rust::Vec&lt;uint8_t&gt; </span><span style="color:#8fa1b3;">reencode_jpeg</span><span style="color:#c0c5ce;">(rust::Slice&lt;</span><span style="color:#b48ead;">const </span><span style="color:#c0c5ce;">uint8_t&gt; </span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">)
+</span><span style="color:#c0c5ce;">rust::Vec&lt;uint8_t&gt; </span><span style="color:#8fa1b3;">reencode_jpeg</span><span style="color:#c0c5ce;">(std::vector&lt;</span><span style="color:#b48ead;">const </span><span style="color:#c0c5ce;">uint8_t&gt; </span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">)
 </span><span style="color:#c0c5ce;">{
 </span><span style="color:#c0c5ce;">    ...
 </span><span style="color:#c0c5ce;">}
@@ -197,7 +198,10 @@
 </span><span style="color:#65737e;">// Asynchronously reencodes a JPEG to PNG via a thread pool.
 </span><span style="color:#b48ead;">void </span><span style="color:#8fa1b3;">reencode_jpeg_async</span><span style="color:#c0c5ce;">(rust::Slice&lt;</span><span style="color:#b48ead;">const </span><span style="color:#c0c5ce;">uint8_t&gt; </span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">)
 </span><span style="color:#c0c5ce;">{
-</span><span style="color:#c0c5ce;">    </span><span style="color:#8fa1b3;">boost::asio::post</span><span style="color:#c0c5ce;">(g_thread_pool, [=]() { </span><span style="color:#8fa1b3;">reencode_jpeg</span><span style="color:#c0c5ce;">(jpeg_data); });
+</span><span style="color:#c0c5ce;">    std::vector&lt;</span><span style="color:#b48ead;">const </span><span style="color:#c0c5ce;">uint8_t&gt; </span><span style="color:#8fa1b3;">data</span><span style="color:#c0c5ce;">(jpeg_data.</span><span style="color:#8fa1b3;">begin</span><span style="color:#c0c5ce;">(), jpeg_data.</span><span style="color:#8fa1b3;">end</span><span style="color:#c0c5ce;">());
+</span><span style="color:#c0c5ce;">    </span><span style="color:#8fa1b3;">boost::asio::post</span><span style="color:#c0c5ce;">(g_thread_pool, [data = </span><span style="color:#8fa1b3;">std::move</span><span style="color:#c0c5ce;">(data)]() {
+</span><span style="color:#c0c5ce;">        </span><span style="color:#8fa1b3;">reencode_jpeg</span><span style="color:#c0c5ce;">(</span><span style="color:#8fa1b3;">std::move</span><span style="color:#c0c5ce;">(data));
+</span><span style="color:#c0c5ce;">    });
 </span><span style="color:#c0c5ce;">}
 </span></pre>
 <p>But now we have a problem: how do we get the data back from the <code>reencode_jpeg</code> function? We don't want to block on retrieving the results from the thread pool, as that would keep blocking our Tokio event loop. What we need is a way to return to the event loop while the conversion process runs and subsequently to enqueue a task to send the results back to the client. Traditionally, we'd use a callback for this. On the C++ side:</p>
@@ -214,16 +218,17 @@
 </span><span style="color:#c0c5ce;">
 </span><span style="color:#65737e;">// Asynchronously reencodes a JPEG to PNG via a thread pool.
 </span><span style="color:#b48ead;">void </span><span style="color:#8fa1b3;">reencode_jpeg_async</span><span style="color:#c0c5ce;">(
-</span><span style="color:#c0c5ce;">    rust::Slice&lt;</span><span style="color:#b48ead;">const </span><span style="color:#c0c5ce;">uint8_t&gt; </span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">,
+</span><span style="color:#c0c5ce;">    std::vector&lt;</span><span style="color:#b48ead;">const </span><span style="color:#c0c5ce;">uint8_t&gt; </span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">,
 </span><span style="color:#c0c5ce;">    rust::Fn&lt;</span><span style="color:#b48ead;">void</span><span style="color:#c0c5ce;">(rust::Box&lt;CallbackContext&gt;, rust::Vec&lt;uint8_t&gt;)&gt; </span><span style="color:#bf616a;">callback</span><span style="color:#c0c5ce;">,
 </span><span style="color:#c0c5ce;">    rust::Box&lt;CallbackContext&gt; </span><span style="color:#bf616a;">context</span><span style="color:#c0c5ce;">)
 </span><span style="color:#c0c5ce;">{
+</span><span style="color:#c0c5ce;">    std::vector&lt;</span><span style="color:#b48ead;">const </span><span style="color:#c0c5ce;">uint8_t&gt; </span><span style="color:#8fa1b3;">data</span><span style="color:#c0c5ce;">(jpeg_data.</span><span style="color:#8fa1b3;">begin</span><span style="color:#c0c5ce;">(), jpeg_data.</span><span style="color:#8fa1b3;">end</span><span style="color:#c0c5ce;">());
 </span><span style="color:#c0c5ce;">    </span><span style="color:#8fa1b3;">boost::asio::post</span><span style="color:#c0c5ce;">(g_thread_pool, [
-</span><span style="color:#c0c5ce;">        jpeg_data,
+</span><span style="color:#c0c5ce;">        data = </span><span style="color:#8fa1b3;">std::move</span><span style="color:#c0c5ce;">(data),
 </span><span style="color:#c0c5ce;">        callback = </span><span style="color:#8fa1b3;">std::move</span><span style="color:#c0c5ce;">(callback),
 </span><span style="color:#c0c5ce;">        context = </span><span style="color:#8fa1b3;">std::move</span><span style="color:#c0c5ce;">(context)
 </span><span style="color:#c0c5ce;">    ]() </span><span style="color:#b48ead;">mutable </span><span style="color:#c0c5ce;">{
-</span><span style="color:#c0c5ce;">        </span><span style="color:#8fa1b3;">reencode_jpeg</span><span style="color:#c0c5ce;">(jpeg_data, </span><span style="color:#8fa1b3;">std::move</span><span style="color:#c0c5ce;">(callback), </span><span style="color:#8fa1b3;">std::move</span><span style="color:#c0c5ce;">(context));
+</span><span style="color:#c0c5ce;">        </span><span style="color:#8fa1b3;">reencode_jpeg</span><span style="color:#c0c5ce;">(</span><span style="color:#8fa1b3;">std::move</span><span style="color:#c0c5ce;">(data), </span><span style="color:#8fa1b3;">std::move</span><span style="color:#c0c5ce;">(callback), </span><span style="color:#8fa1b3;">std::move</span><span style="color:#c0c5ce;">(context));
 </span><span style="color:#c0c5ce;">    });
 </span><span style="color:#c0c5ce;">}
 </span></pre>
@@ -272,7 +277,7 @@
 </span><span style="color:#c0c5ce;">folly::Executor::KeepAlive&lt;folly::CPUThreadPoolExecutor&gt; </span><span style="color:#8fa1b3;">g_thread_pool</span><span style="color:#c0c5ce;">(
 </span><span style="color:#c0c5ce;">    </span><span style="color:#b48ead;">new </span><span style="color:#8fa1b3;">folly::CPUThreadPoolExecutor</span><span style="color:#c0c5ce;">(</span><span style="color:#d08770;">8</span><span style="color:#c0c5ce;">));
 </span><span style="color:#c0c5ce;">
-</span><span style="color:#b48ead;">auto </span><span style="color:#8fa1b3;">reencode_jpeg</span><span style="color:#c0c5ce;">(rust::Slice&lt;</span><span style="color:#b48ead;">const </span><span style="color:#c0c5ce;">uint8_t&gt; </span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">)
+</span><span style="color:#b48ead;">auto </span><span style="color:#8fa1b3;">reencode_jpeg</span><span style="color:#c0c5ce;">(std::vector&lt;</span><span style="color:#b48ead;">const </span><span style="color:#c0c5ce;">uint8_t&gt; </span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">)
 </span><span style="color:#c0c5ce;">{
 </span><span style="color:#c0c5ce;">    ...
 </span><span style="color:#c0c5ce;">}
@@ -280,7 +285,9 @@
 </span><span style="color:#65737e;">// Asynchronously reencodes a JPEG to PNG via a thread pool.
 </span><span style="color:#c0c5ce;">RustFutureVecU8 </span><span style="color:#8fa1b3;">reencode_jpeg_async</span><span style="color:#c0c5ce;">(rust::Slice&lt;</span><span style="color:#b48ead;">const </span><span style="color:#c0c5ce;">uint8_t&gt; </span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">)
 </span><span style="color:#c0c5ce;">{
-</span><span style="color:#c0c5ce;">    </span><span style="color:#8fa1b3;">reencode_jpeg</span><span style="color:#c0c5ce;">(</span><span style="color:#8fa1b3;">std::move</span><span style="color:#c0c5ce;">(jpeg_data)).</span><span style="color:#8fa1b3;">semi</span><span style="color:#c0c5ce;">().</span><span style="color:#8fa1b3;">via</span><span style="color:#c0c5ce;">(g_thread_pool);
+</span><span style="color:#c0c5ce;">    </span><span style="color:#8fa1b3;">reencode_jpeg</span><span style="color:#c0c5ce;">(</span><span style="color:#8fa1b3;">std::vector</span><span style="color:#c0c5ce;">(jpeg_data.</span><span style="color:#8fa1b3;">begin</span><span style="color:#c0c5ce;">(), jpeg_data.</span><span style="color:#8fa1b3;">end</span><span style="color:#c0c5ce;">()))
+</span><span style="color:#c0c5ce;">        .</span><span style="color:#8fa1b3;">semi</span><span style="color:#c0c5ce;">()
+</span><span style="color:#c0c5ce;">        .</span><span style="color:#8fa1b3;">via</span><span style="color:#c0c5ce;">(g_thread_pool);
 </span><span style="color:#c0c5ce;">}
 </span></pre>
 <p>(We could equally well have used <a href="https://github.com/lewissbaker/cppcoro">CppCoro</a>, or another lightweight package, instead of Folly; we just need some C++ library that exposes thread pool work items as <code>co_await</code>able tasks. Folly was chosen for this example because it's the most popular coroutine library of this writing.)</p>
@@ -292,7 +299,7 @@
 </span><span style="color:#b48ead;">#include </span><span style="color:#c0c5ce;">&lt;</span><span style="color:#a3be8c;">folly/experimental/coro/Task.h</span><span style="color:#c0c5ce;">&gt;
 </span><span style="color:#c0c5ce;">...
 </span><span style="color:#c0c5ce;">
-</span><span style="color:#c0c5ce;">folly::coro::Task&lt;rust::Vec&lt;uint8_t&gt;&gt; </span><span style="color:#8fa1b3;">reencode_jpeg</span><span style="color:#c0c5ce;">(rust::Slice&lt;</span><span style="color:#b48ead;">const </span><span style="color:#c0c5ce;">uint8_t&gt; </span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">)
+</span><span style="color:#c0c5ce;">folly::coro::Task&lt;rust::Vec&lt;uint8_t&gt;&gt; </span><span style="color:#8fa1b3;">reencode_jpeg</span><span style="color:#c0c5ce;">(std::vector&lt;</span><span style="color:#b48ead;">const </span><span style="color:#c0c5ce;">uint8_t&gt; </span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">)
 </span><span style="color:#c0c5ce;">{
 </span><span style="color:#c0c5ce;">    ...
 </span><span style="color:#c0c5ce;">
@@ -302,7 +309,9 @@
 </span><span style="color:#65737e;">// Asynchronously reencodes a JPEG to PNG via a thread pool.
 </span><span style="color:#c0c5ce;">RustFutureVecU8 </span><span style="color:#8fa1b3;">reencode_jpeg_async</span><span style="color:#c0c5ce;">(rust::Slice&lt;</span><span style="color:#b48ead;">const </span><span style="color:#c0c5ce;">uint8_t&gt; </span><span style="color:#bf616a;">jpeg_data</span><span style="color:#c0c5ce;">)
 </span><span style="color:#c0c5ce;">{
-</span><span style="color:#c0c5ce;">    co_return co_await </span><span style="color:#8fa1b3;">reencode_jpeg</span><span style="color:#c0c5ce;">(</span><span style="color:#8fa1b3;">std::move</span><span style="color:#c0c5ce;">(jpeg_data)).</span><span style="color:#8fa1b3;">semi</span><span style="color:#c0c5ce;">().</span><span style="color:#8fa1b3;">via</span><span style="color:#c0c5ce;">(g_thread_pool);
+</span><span style="color:#c0c5ce;">    co_return co_await </span><span style="color:#8fa1b3;">reencode_jpeg</span><span style="color:#c0c5ce;">(</span><span style="color:#8fa1b3;">std::vector</span><span style="color:#c0c5ce;">(jpeg_data.</span><span style="color:#8fa1b3;">begin</span><span style="color:#c0c5ce;">(), jpeg_data.</span><span style="color:#8fa1b3;">end</span><span style="color:#c0c5ce;">()))
+</span><span style="color:#c0c5ce;">        .</span><span style="color:#8fa1b3;">semi</span><span style="color:#c0c5ce;">()
+</span><span style="color:#c0c5ce;">        .</span><span style="color:#8fa1b3;">via</span><span style="color:#c0c5ce;">(g_thread_pool);
 </span><span style="color:#c0c5ce;">}
 </span><span style="color:#c0c5ce;">
 </span></pre>
