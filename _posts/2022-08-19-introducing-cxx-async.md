@@ -9,6 +9,8 @@ I'm happy to announce a new Rust crate that I've been working on for a while at 
 categories:
 ---
 
+*Update 9/6/2022: Fixed a potential use-after-free on the C++ side if the future got dropped. Thanks to David Tolnay for pointing this out.*
+
 I'm happy to announce a new Rust crate that I've been working on for a while at Meta: [`cxx-async`]. `cxx-async` is an extension to the [`cxx`] crate that allows for bidirectional interoperability between C++ coroutines and asynchronous Rust functions. With it, you can `await` C++ coroutines and `co_await` Rust functions; as much as possible, everything "just works". The biggest practical benefit of C++ coroutine interoperability is *elimination of awkward callback patterns when interfacing with C++*.
 
 Let's build a simple service to demonstrate this. Suppose we want to build a Rust service that uses the C `stb_image` and `stb_image_write` libraries to convert JPEG images to PNG[^1]. (Note: Don't expose the `stb_image` libraries to untrusted input in a real application, as they aren't designed to be secure. They just have a simple API that's good for demonstration.) We might use the Tokio libraries to make a service like this:
@@ -118,7 +120,7 @@ So we have a working service, but it has scalability problems. We're doing the o
 
 boost::asio::thread_pool g_thread_pool(8);
 
-rust::Vec<uint8_t> reencode_jpeg(rust::Slice<const uint8_t> jpeg_data)
+rust::Vec<uint8_t> reencode_jpeg(std::vector<const uint8_t> jpeg_data)
 {
     ...
 }
@@ -126,7 +128,10 @@ rust::Vec<uint8_t> reencode_jpeg(rust::Slice<const uint8_t> jpeg_data)
 // Asynchronously reencodes a JPEG to PNG via a thread pool.
 void reencode_jpeg_async(rust::Slice<const uint8_t> jpeg_data)
 {
-    boost::asio::post(g_thread_pool, [=]() { reencode_jpeg(jpeg_data); });
+    std::vector<const uint8_t> data(jpeg_data.begin(), jpeg_data.end());
+    boost::asio::post(g_thread_pool, [data = std::move(data)]() {
+        reencode_jpeg(std::move(data));
+    });
 }
 ```
 
@@ -145,16 +150,17 @@ void reencode_jpeg(
 
 // Asynchronously reencodes a JPEG to PNG via a thread pool.
 void reencode_jpeg_async(
-    rust::Slice<const uint8_t> jpeg_data,
+    std::vector<const uint8_t> jpeg_data,
     rust::Fn<void(rust::Box<CallbackContext>, rust::Vec<uint8_t>)> callback,
     rust::Box<CallbackContext> context)
 {
+    std::vector<const uint8_t> data(jpeg_data.begin(), jpeg_data.end());
     boost::asio::post(g_thread_pool, [
-        jpeg_data,
+        data = std::move(data),
         callback = std::move(callback),
         context = std::move(context)
     ]() mutable {
-        reencode_jpeg(jpeg_data, std::move(callback), std::move(context));
+        reencode_jpeg(std::move(data), std::move(callback), std::move(context));
     });
 }
 ```
@@ -208,7 +214,7 @@ It turns out that now there is, with `cxx-async`. We can upgrade our C++ code to
 folly::Executor::KeepAlive<folly::CPUThreadPoolExecutor> g_thread_pool(
     new folly::CPUThreadPoolExecutor(8));
 
-auto reencode_jpeg(rust::Slice<const uint8_t> jpeg_data)
+auto reencode_jpeg(std::vector<const uint8_t> jpeg_data)
 {
     ...
 }
@@ -216,7 +222,9 @@ auto reencode_jpeg(rust::Slice<const uint8_t> jpeg_data)
 // Asynchronously reencodes a JPEG to PNG via a thread pool.
 RustFutureVecU8 reencode_jpeg_async(rust::Slice<const uint8_t> jpeg_data)
 {
-    reencode_jpeg(std::move(jpeg_data)).semi().via(g_thread_pool);
+    reencode_jpeg(std::vector(jpeg_data.begin(), jpeg_data.end()))
+        .semi()
+        .via(g_thread_pool);
 }
 ```
 
@@ -231,7 +239,7 @@ Now we modify our C++ functions to be coroutines instead of taking callbacks:
 #include <folly/experimental/coro/Task.h>
 ...
 
-folly::coro::Task<rust::Vec<uint8_t>> reencode_jpeg(rust::Slice<const uint8_t> jpeg_data)
+folly::coro::Task<rust::Vec<uint8_t>> reencode_jpeg(std::vector<const uint8_t> jpeg_data)
 {
     ...
 
@@ -241,7 +249,9 @@ folly::coro::Task<rust::Vec<uint8_t>> reencode_jpeg(rust::Slice<const uint8_t> j
 // Asynchronously reencodes a JPEG to PNG via a thread pool.
 RustFutureVecU8 reencode_jpeg_async(rust::Slice<const uint8_t> jpeg_data)
 {
-    co_return co_await reencode_jpeg(std::move(jpeg_data)).semi().via(g_thread_pool);
+    co_return co_await reencode_jpeg(std::vector(jpeg_data.begin(), jpeg_data.end()))
+        .semi()
+        .via(g_thread_pool);
 }
 
 ```
